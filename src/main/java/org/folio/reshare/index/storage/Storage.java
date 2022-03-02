@@ -26,6 +26,8 @@ public class Storage {
 
   TenantPgPool pool;
   String bibRecordTable;
+  String matchTypeTable;
+  String matchPointTable;
   String itemView;
 
   /**
@@ -36,6 +38,8 @@ public class Storage {
   public Storage(Vertx vertx, String tenant) {
     this.pool = TenantPgPool.pool(vertx,tenant);
     this.bibRecordTable = pool.getSchema() + ".bib_record";
+    this.matchTypeTable = pool.getSchema() + ".match_type";
+    this.matchPointTable = pool.getSchema() + ".match_point";
     this.itemView = pool.getSchema() + ".item_view";
   }
 
@@ -50,23 +54,35 @@ public class Storage {
                 + "(id uuid NOT NULL PRIMARY KEY,"
                 + "local_identifier VARCHAR NOT NULL,"
                 + "library_id uuid NOT NULL,"
-                + "title VARCHAR,"
-                + "match_key VARCHAR NOT NULL,"
-                + "isbn VARCHAR,"
-                + "issn VARCHAR,"
-                + "publisher_distributor_number VARCHAR,"
                 + "source JSONB NOT NULL,"
                 + "inventory JSONB"
                 + ")",
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_local_id ON " + bibRecordTable
                 + " (local_identifier, library_id)",
-            "CREATE INDEX IF NOT EXISTS idx_bib_record_match_key ON " + bibRecordTable
-                + " (match_key)",
             "CREATE OR REPLACE VIEW " + itemView
-                + " AS SELECT id, local_identifier, library_id, match_key,"
+                + " AS SELECT id, local_identifier, library_id,"
                 + " jsonb_array_elements("
                 + " (jsonb_array_elements((inventory->>'holdingsRecords')::JSONB)->>'items')::JSONB"
-                + ") item FROM " + bibRecordTable
+                + ") item FROM " + bibRecordTable,
+            "CREATE TABLE IF NOT EXISTS " + matchTypeTable
+                + "(id uuid NOT NULL PRIMARY KEY,"
+                + " code VARCHAR, "
+                + " name VARCHAR)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_match_type_code ON " + matchTypeTable
+                + " (code)",
+            "CREATE TABLE IF NOT EXISTS " + matchPointTable
+                + "(id uuid NOT NULL PRIMARY KEY,"
+                + " bib_record_id uuid NOT NULL,"
+                + " match_type_id uuid NOT NULL,"
+                + " match_value VARCHAR NOT NULL,"
+                + " CONSTRAINT match_point_fk_bib_record FOREIGN KEY "
+                + "                (bib_record_id) REFERENCES " + bibRecordTable + ","
+                + " CONSTRAINT match_point_fk_type FOREIGN KEY "
+                + "                (match_type_id) REFERENCES " + matchTypeTable + ")",
+            "CREATE UNIQUE INDEX IF NOT EXISTS match_point_idx ON " + matchPointTable
+                + " (match_type_id, match_value, bib_record_id)",
+            "CREATE INDEX IF NOT EXISTS match_point_bib_id_ids ON " + matchPointTable
+                + " (bib_record_id)"
         )
     ).mapEmpty();
   }
@@ -77,19 +93,17 @@ public class Storage {
   public Future<Void> upsertBibRecord(
       String localIdentifier,
       String libraryId,
-      String matchKey,
       JsonObject source,
       JsonObject inventory) {
 
     return pool.preparedQuery(
         "INSERT INTO " + bibRecordTable
-            + " (id, local_identifier, library_id, match_key, source, inventory)"
-            + " VALUES ($1, $2, $3, $4, $5, $6)"
+            + " (id, local_identifier, library_id, source, inventory)"
+            + " VALUES ($1, $2, $3, $4, $5)"
             + " ON CONFLICT (local_identifier, library_id) DO UPDATE "
-            + " SET match_key = $4, "
-            + "     source = $5, "
-            + "     inventory = $6").execute(
-        Tuple.of(UUID.randomUUID(), localIdentifier, libraryId, matchKey, source, inventory)
+            + " SET source = $4, "
+            + "     inventory = $5").execute(
+        Tuple.of(UUID.randomUUID(), localIdentifier, libraryId, source, inventory)
     ).mapEmpty();
   }
 
