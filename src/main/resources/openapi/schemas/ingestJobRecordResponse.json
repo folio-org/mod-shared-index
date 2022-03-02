@@ -1,0 +1,18 @@
+{
+  "description": "Ingest job record response",
+  "type": "object",
+  "properties": {
+    "globalId": {
+      "type": "string",
+      "description" : "Global identifier",
+      "format" : "uuid"
+    },
+    "matchKeys": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "globalId", "matchKeys"
+  ]
+}

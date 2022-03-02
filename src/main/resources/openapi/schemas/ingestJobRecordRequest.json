@@ -1,0 +1,17 @@
+{
+  "description": "Ingest job record request",
+  "type": "object",
+  "properties": {
+    "localId": {
+      "type": "string",
+      "description" : "Local identifier"
+    },
+    "payload": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "localId", "payload"
+  ]
+}
