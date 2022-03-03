@@ -10,9 +10,13 @@
     "numberOfRecords": {
       "type": "integer",
       "description" : "number of records in job so far"
+    },
+    "elapsedTime": {
+      "type": "string",
+      "description" : "Elapsed time since job was created"
     }
   },
-  "additionalProperties": false,
+  "additionalProperties": true,
   "required": [
     "jobId"
   ]

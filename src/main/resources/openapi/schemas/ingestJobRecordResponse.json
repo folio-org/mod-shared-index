@@ -1,18 +1,22 @@
 {
-  "description": "Ingest job record response",
-  "type": "object",
-  "properties": {
-    "globalId": {
-      "type": "string",
-      "description" : "Global identifier",
-      "format" : "uuid"
+  "description": "Ingest job records response",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "globalId": {
+        "type": "string",
+        "description": "Global identifier",
+        "format": "uuid"
+      },
+      "matchKeys": {
+        "type": "object"
+      }
     },
-    "matchKeys": {
-      "type": "object"
-    }
-  },
-  "additionalProperties": false,
-  "required": [
-    "globalId", "matchKeys"
-  ]
+    "additionalProperties": false,
+    "required": [
+      "globalId",
+      "matchKeys"
+    ]
+  }
 }
