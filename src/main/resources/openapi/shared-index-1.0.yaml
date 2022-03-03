@@ -195,6 +195,7 @@ paths:
           $ref: "#/components/responses/trait_404"
         "500":
           $ref: "#/components/responses/trait_500"
+  # Ingest
   /shared-index/shared-index/ingest-jobs:
     parameters:
       - $ref: headers/okapi-tenant.yaml
@@ -219,7 +220,6 @@ paths:
           $ref: "#/components/responses/trait_400"
         "500":
           $ref: "#/components/responses/trait_500"
-  # Ingest
   /shared-index/shared-index/ingest-jobs/{id}:
     parameters:
       - $ref: headers/okapi-tenant.yaml
@@ -283,6 +283,59 @@ paths:
       responses:
         "204":
           description: Job deleted.
+        "400":
+          $ref: "#/components/responses/trait_400"
+        "404":
+          $ref: "#/components/responses/trait_404"
+        "500":
+          $ref: "#/components/responses/trait_500"
+  # Retrieval
+  /shared-index/records:
+    parameters:
+      - $ref: headers/okapi-tenant.yaml
+      - $ref: headers/okapi-token.yaml
+      - $ref: headers/okapi-url.yaml
+      - $ref: parameters/limit.yaml
+      - $ref: parameters/query.yaml
+      - $ref: parameters/offset.yaml
+    get:
+      description: Get records that satisfy query.
+      operationId: getRecords
+      responses:
+        "200":
+          description: shared index record(s) found
+          content:
+            application/json:
+              schema:
+                $ref: schemas/sharedIndexTitles.json
+        "400":
+          $ref: "#/components/responses/trait_400"
+        "404":
+          $ref: "#/components/responses/trait_404"
+        "500":
+          $ref: "#/components/responses/trait_500"
+  /shared-index/records/{globalId}:
+    parameters:
+      - $ref: headers/okapi-tenant.yaml
+      - $ref: headers/okapi-token.yaml
+      - $ref: headers/okapi-url.yaml
+      - in: path
+        name: globalId
+        required: true
+        description: global identifier
+        schema:
+          type: string
+          format: uuid
+    get:
+      description: Get record with global identifier.
+      operationId: getRecordGlobalId
+      responses:
+        "200":
+          description: shared index record found.
+          content:
+            application/json:
+              schema:
+                $ref: schemas/sharedIndexTitle.json
         "400":
           $ref: "#/components/responses/trait_400"
         "404":

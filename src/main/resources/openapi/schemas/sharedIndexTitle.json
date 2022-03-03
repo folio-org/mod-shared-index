@@ -1,0 +1,25 @@
+{
+  "description": "Shared record",
+  "type": "object",
+  "properties": {
+    "globalId": {
+      "type": "string",
+      "description": "Global identifier",
+      "format" : "uuid"
+    },
+    "localId": {
+      "type": "string",
+      "description": "Local identifier"
+    },
+    "matchKeys": {
+      "type": "object"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "globalId", "localId", "matchKeys", "payload"
+  ]
+}
