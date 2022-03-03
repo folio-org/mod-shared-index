@@ -233,7 +233,7 @@ paths:
           type: string
           format: uuid
     put:
-      description: Put record for job.
+      description: Put records for job.
       operationId: ingestJobRecord
       requestBody:
         content:
@@ -242,7 +242,7 @@ paths:
               $ref: schemas/ingestJobRecordRequest.json
       responses:
         "200":
-          description: Record accepted.
+          description: Records accepted.
           content:
             application/json:
               schema:
@@ -309,6 +309,24 @@ paths:
             application/json:
               schema:
                 $ref: schemas/sharedIndexTitles.json
+        "400":
+          $ref: "#/components/responses/trait_400"
+        "500":
+          $ref: "#/components/responses/trait_500"
+    put:
+      description: Create or update records.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: schemas/ingestJobRecordRequest.json
+      responses:
+        "200":
+          description: Records accepted.
+          content:
+            application/json:
+              schema:
+                $ref: schemas/ingestJobRecordResponse.json
         "400":
           $ref: "#/components/responses/trait_400"
         "500":
