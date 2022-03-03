@@ -1,0 +1,26 @@
+{
+  "description": "match key statistics",
+  "type": "object",
+  "properties": {
+    "totalRecords": {
+      "type": "integer",
+      "description" : "total records"
+    },
+    "totalMatchkeysInitialized": {
+      "type": "integer",
+      "description": "?"
+    },
+    "recordsWithMatchkeyEmpty": {
+      "type": "integer",
+      "description": "?"
+    },
+    "matchkeySingletons": {
+      "type": "integer",
+      "description": "?"
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "totalRecords"
+  ]
+}
