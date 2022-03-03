@@ -12,10 +12,12 @@
       "description": "Local identifier"
     },
     "matchKeys": {
-      "type": "object"
+      "type": "object",
+      "description" : "match keys for this record"
     },
     "payload": {
-      "type": "object"
+      "type": "object",
+      "description" : "combined marc, inventory"
     }
   },
   "additionalProperties": false,

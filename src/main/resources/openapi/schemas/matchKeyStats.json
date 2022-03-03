@@ -8,15 +8,15 @@
     },
     "totalMatchkeysInitialized": {
       "type": "integer",
-      "description": "?"
+      "description": "total records initialized"
     },
     "recordsWithMatchkeyEmpty": {
       "type": "integer",
-      "description": "?"
+      "description": "number of records with empty match key"
     },
     "matchkeySingletons": {
       "type": "integer",
-      "description": "?"
+      "description": "number of records matching no other"
     }
   },
   "additionalProperties": true,
