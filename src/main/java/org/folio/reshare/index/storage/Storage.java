@@ -24,10 +24,15 @@ import org.folio.tlib.postgres.TenantPgPool;
 public class Storage {
   private static final Logger log = LogManager.getLogger(Storage.class);
 
+  private static final String IDENTIFIER_TYPE_ID_ISBN = "8261054f-be78-422d-bd51-4ed9f33c3422";
+  private static final String MATCH_TYPE_ID_ISBN = "034e3f52-0092-4b4e-8704-d5f56f5b28a1";
+
   TenantPgPool pool;
   String bibRecordTable;
   String matchTypeTable;
   String matchPointTable;
+  String matchPointFunction;
+  String matchPointTrigger;
   String itemView;
 
   /**
@@ -40,6 +45,8 @@ public class Storage {
     this.bibRecordTable = pool.getSchema() + ".bib_record";
     this.matchTypeTable = pool.getSchema() + ".match_type";
     this.matchPointTable = pool.getSchema() + ".match_point";
+    this.matchPointFunction = pool.getSchema() + ".match_points()";
+    this.matchPointTrigger = "match_points";
     this.itemView = pool.getSchema() + ".item_view";
   }
 
@@ -70,19 +77,46 @@ public class Storage {
                 + " name VARCHAR)",
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_match_type_code ON " + matchTypeTable
                 + " (code)",
+            "INSERT INTO " + matchTypeTable
+                + " (id, code, name) "
+                + " VALUES ('" + MATCH_TYPE_ID_ISBN + "', 'ISBN', 'ISBN') ON CONFLICT DO NOTHING",
             "CREATE TABLE IF NOT EXISTS " + matchPointTable
-                + "(id uuid NOT NULL PRIMARY KEY,"
-                + " bib_record_id uuid NOT NULL,"
+                + "(bib_record_id uuid NOT NULL,"
                 + " match_type_id uuid NOT NULL,"
                 + " match_value VARCHAR NOT NULL,"
                 + " CONSTRAINT match_point_fk_bib_record FOREIGN KEY "
-                + "                (bib_record_id) REFERENCES " + bibRecordTable + ","
+                + "                (bib_record_id) REFERENCES " + bibRecordTable
+                + " ON DELETE CASCADE,"
                 + " CONSTRAINT match_point_fk_type FOREIGN KEY "
                 + "                (match_type_id) REFERENCES " + matchTypeTable + ")",
             "CREATE UNIQUE INDEX IF NOT EXISTS match_point_idx ON " + matchPointTable
                 + " (match_type_id, match_value, bib_record_id)",
-            "CREATE INDEX IF NOT EXISTS match_point_bib_id_ids ON " + matchPointTable
-                + " (bib_record_id)"
+            "CREATE INDEX IF NOT EXISTS match_point_bib_id_idX ON " + matchPointTable
+                + " (bib_record_id)",
+            "CREATE OR REPLACE FUNCTION " + matchPointFunction
+                + " RETURNS TRIGGER AS $match_points$"
+                + " BEGIN"
+                + "   IF (TG_OP = 'UPDATE') THEN"
+                + "     DELETE FROM " + matchPointTable
+                + "     WHERE bib_record_id = NEW.id;"
+                + "   END IF;"
+                + "   IF (TG_OP = 'UPDATE' OR TG_OP = 'INSERT') THEN"
+                + "     INSERT INTO " + matchPointTable
+                + "       (bib_record_id, match_type_id, match_value)"
+                + "     SELECT NEW.id, '" + MATCH_TYPE_ID_ISBN + "', identifier->>'value'"
+                + "     FROM jsonb_array_elements("
+                + "           ((NEW.inventory->>'instance')::JSONB->>'identifiers')::JSONB) "
+                + "            AS identifier"
+                + "            WHERE identifier->>'identifierTypeId'='"
+                +                    IDENTIFIER_TYPE_ID_ISBN + "';"
+                + "   END IF;"
+                + "   RETURN NULL;"
+                + " END;"
+                + " $match_points$ LANGUAGE plpgsql;",
+            "DROP TRIGGER IF EXISTS " + matchPointTrigger + " ON " + bibRecordTable,
+            "CREATE TRIGGER " + matchPointTrigger
+                + " AFTER INSERT OR UPDATE ON " + bibRecordTable
+                + " FOR EACH ROW EXECUTE PROCEDURE " + matchPointFunction
         )
     ).mapEmpty();
   }
