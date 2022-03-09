@@ -119,10 +119,10 @@ public class Storage {
     ).mapEmpty();
   }
 
-  Future<Void> upsertSharedRecord(SqlConnection conn, UUID sourceId, JsonObject record) {
-    final String localIdentifier = record.getString("localId");
-    final JsonObject source = record.getJsonObject("marcPayload");
-    final JsonObject inventory = record.getJsonObject("inventoryPayload");
+  Future<Void> upsertSharedRecord(SqlConnection conn, UUID sourceId, JsonObject sharedRecord) {
+    final String localIdentifier = sharedRecord.getString("localId");
+    final JsonObject source = sharedRecord.getJsonObject("marcPayload");
+    final JsonObject inventory = sharedRecord.getJsonObject("inventoryPayload");
     return upsertBibRecord(conn, localIdentifier, sourceId, source, inventory);
   }
 
@@ -137,8 +137,8 @@ public class Storage {
     return pool.getConnection().compose(conn -> {
       Future<Void> future = Future.succeededFuture();
       for (int i = 0; i < records.size(); i++) {
-        JsonObject record = records.getJsonObject(i);
-        future = future.compose(x -> upsertSharedRecord(conn, sourceId, record));
+        JsonObject sharedRecord = records.getJsonObject(i);
+        future = future.compose(x -> upsertSharedRecord(conn, sourceId, sharedRecord));
       }
       return future.eventually(y -> conn.close());
     });
