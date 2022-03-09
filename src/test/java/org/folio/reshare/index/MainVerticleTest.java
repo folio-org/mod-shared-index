@@ -21,6 +21,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.testcontainers.containers.PostgreSQLContainer;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.emptyArray;
 import static org.hamcrest.Matchers.equalTo;
@@ -148,7 +149,7 @@ public class MainVerticleTest {
         .put("/shared-index/shared-titles")
         .then().statusCode(400)
         .header("Content-Type", is("text/plain"))
-        .body(is("X-Okapi-Tenant header must match ^[a-z][a-z0-9]{0,30}$"));
+        .body(containsString("X-Okapi-Tenant header must match"));
   }
 
   @Test
