@@ -81,6 +81,25 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     });
   }
 
+  Future<Void> getSharedRecords(RoutingContext ctx) {
+    PgCqlQuery pgCqlQuery = PgCqlQuery.query();
+    pgCqlQuery.addField(
+        new PgCqlField("cql.allRecords", PgCqlField.Type.ALWAYS_MATCHES));
+    pgCqlQuery.addField(
+        new PgCqlField("id", PgCqlField.Type.UUID));
+    pgCqlQuery.addField(
+        new PgCqlField("local_identifier", "localIdentifier", PgCqlField.Type.TEXT));
+    pgCqlQuery.addField(
+        new PgCqlField("library_id", "libraryId", PgCqlField.Type.UUID));
+
+    RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
+    pgCqlQuery.parse(stringOrNull(params.queryParameter("query")));
+
+    Storage storage = storage(ctx);
+    return storage.getSharedRecords(ctx, pgCqlQuery.getWhereClause(),
+        pgCqlQuery.getOrderByClause());
+  }
+
   static void failHandler(RoutingContext ctx) {
     Throwable t = ctx.failure();
     // both semantic errors and syntax errors are from same pile ... Choosing 400 over 422.
@@ -120,6 +139,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
           add(routerBuilder, "getSharedTitles", this::getSharedTitles);
           add(routerBuilder, "putSharedTitle", this::putSharedTitle);
           add(routerBuilder, "putSharedRecords", this::putSharedRecords);
+          add(routerBuilder, "getSharedRecords", this::getSharedRecords);
           return routerBuilder.createRouter();
         });
   }

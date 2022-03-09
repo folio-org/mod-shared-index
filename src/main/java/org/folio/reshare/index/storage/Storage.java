@@ -145,6 +145,27 @@ public class Storage {
   }
 
   /**
+   * Get shared records.
+   * @param ctx routing context
+   * @param sqlWhere SQL where caluse
+   * @param sqlOrderBy SQL order by clause
+   * @return
+   */
+  public Future<Void> getSharedRecords(RoutingContext ctx, String sqlWhere, String sqlOrderBy) {
+    String from = bibRecordTable;
+    if (sqlWhere != null) {
+      from = from + " WHERE " + sqlWhere;
+    }
+    return streamResult(ctx, null, from, sqlOrderBy, "items",
+        row -> new JsonObject()
+            .put("globalId", row.getUUID("id"))
+            .put("localId", row.getString("local_identifier"))
+            .put("sourceId", row.getUUID("library_id"))
+            .put("payload", row.getJsonObject("source")));
+  }
+
+
+  /**
    * Get shared titles with streaming result.
    * @param ctx routing context
    * @param cqlWhere WHERE clause for SQL (null for no clause)

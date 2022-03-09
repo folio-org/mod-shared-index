@@ -24,6 +24,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 
 @RunWith(VertxUnitRunner.class)
@@ -241,6 +242,16 @@ public class MainVerticleTest {
         .body(request.encode())
         .put("/shared-index/records")
         .then().statusCode(200);
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant)
+        .header("Content-Type", "application/json")
+        .body(request.encode())
+        .get("/shared-index/records")
+        .then().statusCode(200)
+        .body("items", hasSize(2))
+        .body("resultInfo.totalRecords", is(2));
+
   }
 
   @Test
