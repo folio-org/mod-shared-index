@@ -92,11 +92,23 @@ public class Storage {
    */
   public Future<Void> upsertBibRecord(
       String localIdentifier,
-      String libraryId,
+      UUID libraryId,
       JsonObject source,
       JsonObject inventory) {
 
-    return pool.preparedQuery(
+    return pool.getConnection()
+        .compose(conn -> upsertBibRecord(conn, localIdentifier, libraryId, source, inventory)
+            .eventually(y -> conn.close()));
+  }
+
+  Future<Void> upsertBibRecord(
+      SqlConnection conn,
+      String localIdentifier,
+      UUID libraryId,
+      JsonObject source,
+      JsonObject inventory) {
+
+    return conn.preparedQuery(
         "INSERT INTO " + bibRecordTable
             + " (id, local_identifier, library_id, source, inventory)"
             + " VALUES ($1, $2, $3, $4, $5)"
@@ -105,6 +117,31 @@ public class Storage {
             + "     inventory = $5").execute(
         Tuple.of(UUID.randomUUID(), localIdentifier, libraryId, source, inventory)
     ).mapEmpty();
+  }
+
+  Future<Void> upsertSharedRecord(SqlConnection conn, UUID sourceId, JsonObject record) {
+    final String localIdentifier = record.getString("localId");
+    final JsonObject source = record.getJsonObject("marcPayload");
+    final JsonObject inventory = record.getJsonObject("inventoryPayload");
+    return upsertBibRecord(conn, localIdentifier, sourceId, source, inventory);
+  }
+
+  /**
+   * Upsert set of records.
+   * @param request ingest record request
+   * @return async result
+   */
+  public Future<Void> upsertSharedRecords(JsonObject request) {
+    UUID sourceId = UUID.fromString(request.getString("sourceId"));
+    JsonArray records = request.getJsonArray("records");
+    return pool.getConnection().compose(conn -> {
+      Future<Void> future = Future.succeededFuture();
+      for (int i = 0; i < records.size(); i++) {
+        JsonObject record = records.getJsonObject(i);
+        future = future.compose(x -> upsertSharedRecord(conn, sourceId, record));
+      }
+      return future.eventually(y -> conn.close());
+    });
   }
 
   /**

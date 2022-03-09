@@ -239,14 +239,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: schemas/ingestJobRecordRequest.json
+              $ref: schemas/ingestRecordChunk.json
       responses:
         "200":
           description: Records accepted.
           content:
             application/json:
               schema:
-                $ref: schemas/ingestJobRecordResponse.json
+                $ref: schemas/ingestRecordResponse.json
         "400":
           $ref: "#/components/responses/trait_400"
         "404":
@@ -289,7 +289,7 @@ paths:
           $ref: "#/components/responses/trait_404"
         "500":
           $ref: "#/components/responses/trait_500"
-  # Retrieval
+  # Shared Records retrieval and simple ingest
   /shared-index/records:
     parameters:
       - $ref: headers/okapi-tenant.yaml
@@ -301,7 +301,7 @@ paths:
     get:
       description: Get records that satisfy CQL query with fields localId,
         matchkeyId, matchedWith.
-      operationId: getRecordsQuery
+      operationId: getSharedRecords
       responses:
         "200":
           description: shared index record(s) found
@@ -315,18 +315,19 @@ paths:
           $ref: "#/components/responses/trait_500"
     put:
       description: Create or update records.
+      operationId: putSharedRecords
       requestBody:
         content:
           application/json:
             schema:
-              $ref: schemas/ingestJobRecordRequest.json
+              $ref: schemas/ingestRecordRequest.json
       responses:
         "200":
           description: Records accepted.
           content:
             application/json:
               schema:
-                $ref: schemas/ingestJobRecordResponse.json
+                $ref: schemas/ingestRecordResponse.json
         "400":
           $ref: "#/components/responses/trait_400"
         "500":
@@ -345,7 +346,7 @@ paths:
           format: uuid
     get:
       description: Get record with global identifier.
-      operationId: getRecordGlobalId
+      operationId: getSharedRecordsGlobalId
       responses:
         "200":
           description: shared index record found.

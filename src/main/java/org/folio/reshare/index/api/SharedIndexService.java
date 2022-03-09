@@ -2,6 +2,7 @@ package org.folio.reshare.index.api;
 
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
@@ -9,6 +10,7 @@ import io.vertx.ext.web.openapi.RouterBuilder;
 import io.vertx.ext.web.validation.RequestParameter;
 import io.vertx.ext.web.validation.RequestParameters;
 import io.vertx.ext.web.validation.ValidationHandler;
+import java.util.UUID;
 import java.util.function.Function;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -36,12 +38,11 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     JsonObject requestJson = ctx.getBodyAsJson();
 
     final String localIdentifier = requestJson.getString("localIdentifier");
-    final String libraryId = requestJson.getString("libraryId");
+    final UUID libraryId = UUID.fromString(requestJson.getString("libraryId"));
     final JsonObject source = requestJson.getJsonObject("source");
     final JsonObject inventory = requestJson.getJsonObject("inventory");
     MatchKey matchKey = new MatchKey(inventory.getJsonObject("instance"));
     inventory.getJsonObject("instance").put("matchKey", matchKey.getKey());
-
 
     return storage(ctx)
         .upsertBibRecord(localIdentifier, libraryId, source, inventory)
@@ -68,6 +69,16 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
 
     Storage storage = storage(ctx);
     return storage.getTitles(ctx, pgCqlQuery.getWhereClause(), pgCqlQuery.getOrderByClause());
+  }
+
+  Future<Void> putSharedRecords(RoutingContext ctx) {
+    Storage storage = storage(ctx);
+    return storage.upsertSharedRecords(ctx.getBodyAsJson()).onSuccess(res -> {
+      JsonArray ar = new JsonArray();
+      // global ids and match keys here..
+      ctx.response().putHeader("Content-Type", "application/json");
+      ctx.response().end(ar.encode());
+    });
   }
 
   static void failHandler(RoutingContext ctx) {
@@ -108,6 +119,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
         .map(routerBuilder -> {
           add(routerBuilder, "getSharedTitles", this::getSharedTitles);
           add(routerBuilder, "putSharedTitle", this::putSharedTitle);
+          add(routerBuilder, "putSharedRecords", this::putSharedRecords);
           return routerBuilder.createRouter();
         });
   }

@@ -1,5 +1,5 @@
 {
-  "description": "Ingest job records request",
+  "description": "Ingest job records chunk",
   "type": "array",
   "items": {
     "type": "object",

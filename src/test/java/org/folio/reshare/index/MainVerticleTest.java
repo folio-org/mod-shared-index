@@ -6,6 +6,7 @@ import io.restassured.response.ExtractableResponse;
 import io.restassured.response.Response;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Vertx;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.unit.TestContext;
 import io.vertx.ext.unit.junit.VertxUnitRunner;
@@ -23,8 +24,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.emptyArray;
-import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 
 @RunWith(VertxUnitRunner.class)
@@ -213,6 +212,35 @@ public class MainVerticleTest {
         .header("Content-Type", is("application/json"))
         .body("titles", empty())
         .body("resultInfo.totalRecords", is(0));
+  }
+
+  @Test
+  public void putSharedRecords(TestContext context) {
+    String tenant = "tenant3";
+    tenantOp(context, tenant, new JsonObject().put("module_to", "mod-shared-index-1.0.0"), null);
+
+    String sourceId = UUID.randomUUID().toString();
+    JsonArray records = new JsonArray()
+        .add(new JsonObject()
+            .put("localId", "HRID01")
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("inventoryPayload", new JsonObject().put("isbn", "1"))
+        )
+        .add(new JsonObject()
+            .put("localId", "HRID02")
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("inventoryPayload", new JsonObject().put("isbn", "2"))
+        );
+    JsonObject request = new JsonObject()
+        .put("sourceId", sourceId)
+        .put("records", records);
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant)
+        .header("Content-Type", "application/json")
+        .body(request.encode())
+        .put("/shared-index/records")
+        .then().statusCode(200);
   }
 
   @Test
