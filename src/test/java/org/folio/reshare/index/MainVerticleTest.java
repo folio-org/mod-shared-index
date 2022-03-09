@@ -252,6 +252,32 @@ public class MainVerticleTest {
         .body("items", hasSize(2))
         .body("resultInfo.totalRecords", is(2));
 
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant)
+        .header("Content-Type", "application/json")
+        .body(request.encode())
+        .get("/shared-index/records?query=sourceId==" + sourceId)
+        .then().statusCode(200)
+        .body("items", hasSize(2))
+        .body("resultInfo.totalRecords", is(2));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant)
+        .header("Content-Type", "application/json")
+        .body(request.encode())
+        .get("/shared-index/records?query=sourceId==" + UUID.randomUUID())
+        .then().statusCode(200)
+        .body("items", hasSize(0))
+        .body("resultInfo.totalRecords", is(0));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant)
+        .header("Content-Type", "application/json")
+        .body(request.encode())
+        .get("/shared-index/records?query=localId==" + records.getJsonObject(1).getString("localId"))
+        .then().statusCode(200)
+        .body("items", hasSize(1))
+        .body("resultInfo.totalRecords", is(1));
   }
 
   @Test

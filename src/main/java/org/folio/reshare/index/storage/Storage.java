@@ -20,6 +20,7 @@ import java.util.function.Function;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.folio.tlib.postgres.TenantPgPool;
+import org.folio.tlib.util.TenantUtil;
 
 public class Storage {
   private static final Logger log = LogManager.getLogger(Storage.class);
@@ -37,11 +38,15 @@ public class Storage {
    * @param tenant tenant
    */
   public Storage(Vertx vertx, String tenant) {
-    this.pool = TenantPgPool.pool(vertx,tenant);
+    this.pool = TenantPgPool.pool(vertx, tenant);
     this.bibRecordTable = pool.getSchema() + ".bib_record";
     this.matchKeyConfigTable = pool.getSchema() + ".match_key_config";
     this.matchKeyValueTable = pool.getSchema() + ".match_key_value";
     this.itemView = pool.getSchema() + ".item_view";
+  }
+
+  public Storage(RoutingContext routingContext) {
+    this(routingContext.vertx(), TenantUtil.tenant(routingContext));
   }
 
   /**
@@ -313,6 +318,5 @@ public class Storage {
             property, facets, handler)
             .onFailure(x -> sqlConnection.close()));
   }
-
 
 }

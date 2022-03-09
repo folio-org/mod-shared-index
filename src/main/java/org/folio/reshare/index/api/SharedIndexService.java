@@ -19,7 +19,6 @@ import org.folio.tlib.RouterCreator;
 import org.folio.tlib.TenantInitHooks;
 import org.folio.tlib.postgres.PgCqlField;
 import org.folio.tlib.postgres.PgCqlQuery;
-import org.folio.tlib.util.TenantUtil;
 
 public class SharedIndexService implements RouterCreator, TenantInitHooks {
 
@@ -28,10 +27,6 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
 
   public SharedIndexService(Vertx vertx) {
     this.vertx = vertx;
-  }
-
-  private Storage storage(RoutingContext routingContext) {
-    return new Storage(vertx, TenantUtil.tenant(routingContext));
   }
 
   Future<Void> putSharedTitle(RoutingContext ctx) {
@@ -44,7 +39,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     MatchKey matchKey = new MatchKey(inventory.getJsonObject("instance"));
     inventory.getJsonObject("instance").put("matchKey", matchKey.getKey());
 
-    return storage(ctx)
+    return new Storage(ctx)
         .upsertBibRecord(localIdentifier, libraryId, source, inventory)
         .onSuccess(bibRecord -> ctx.response().setStatusCode(204).end());
   }
@@ -67,12 +62,12 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     pgCqlQuery.parse(stringOrNull(params.queryParameter("query")));
 
-    Storage storage = storage(ctx);
+    Storage storage = new Storage(ctx);
     return storage.getTitles(ctx, pgCqlQuery.getWhereClause(), pgCqlQuery.getOrderByClause());
   }
 
   Future<Void> putSharedRecords(RoutingContext ctx) {
-    Storage storage = storage(ctx);
+    Storage storage = new Storage(ctx);
     return storage.upsertSharedRecords(ctx.getBodyAsJson()).onSuccess(res -> {
       JsonArray ar = new JsonArray();
       // global ids and match keys here..
@@ -88,14 +83,14 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     pgCqlQuery.addField(
         new PgCqlField("id", PgCqlField.Type.UUID));
     pgCqlQuery.addField(
-        new PgCqlField("local_identifier", "localIdentifier", PgCqlField.Type.TEXT));
+        new PgCqlField("local_identifier", "localId", PgCqlField.Type.TEXT));
     pgCqlQuery.addField(
-        new PgCqlField("library_id", "libraryId", PgCqlField.Type.UUID));
+        new PgCqlField("library_id", "sourceId", PgCqlField.Type.UUID));
 
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     pgCqlQuery.parse(stringOrNull(params.queryParameter("query")));
 
-    Storage storage = storage(ctx);
+    Storage storage = new Storage(ctx);
     return storage.getSharedRecords(ctx, pgCqlQuery.getWhereClause(),
         pgCqlQuery.getOrderByClause());
   }
