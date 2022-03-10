@@ -155,26 +155,6 @@ public class Storage {
             .put("payload", row.getJsonObject("source")));
   }
 
-
-  /**
-   * Get shared titles with streaming result.
-   * @param ctx routing context
-   * @param cqlWhere WHERE clause for SQL (null for no clause)
-   * @param orderBy  ORDER BY for SQL (null for no order)
-   * @return async result and result written to routing context.
-   */
-  public Future<Void> getTitles(RoutingContext ctx, String cqlWhere, String orderBy) {
-    String from = bibRecordTable;
-    if (cqlWhere != null) {
-      from = from + " WHERE " + cqlWhere;
-    }
-    return streamResult(ctx, null, from, orderBy, "titles",
-        row -> new JsonObject()
-            .put("id", row.getUUID("id"))
-            .put("localIdentifier", row.getString("local_identifier"))
-            .put("libraryId", row.getUUID("library_id")));
-  }
-
   private static JsonObject copyWithoutNulls(JsonObject obj) {
     JsonObject n = new JsonObject();
     obj.getMap().forEach((key, value) -> {
