@@ -5,7 +5,6 @@ import com.jayway.jsonpath.PathNotFoundException;
 import com.jayway.jsonpath.ReadContext;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.json.JsonObject;
-
 import java.util.Collections;
 import java.util.List;
 import org.folio.shared.index.matchkey.MatchKeyException;
