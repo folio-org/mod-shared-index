@@ -1,4 +1,4 @@
-package org.folio.reshare.index.api;
+package org.folio.shared.index.api;
 
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
@@ -13,7 +13,7 @@ import io.vertx.ext.web.validation.ValidationHandler;
 import java.util.function.Function;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.folio.reshare.index.storage.Storage;
+import org.folio.shared.index.storage.Storage;
 import org.folio.tlib.RouterCreator;
 import org.folio.tlib.TenantInitHooks;
 import org.folio.tlib.postgres.PgCqlField;

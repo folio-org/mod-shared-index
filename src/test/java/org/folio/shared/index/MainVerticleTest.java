@@ -1,4 +1,4 @@
-package org.folio.reshare.index;
+package org.folio.shared.index;
 
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
@@ -23,7 +23,6 @@ import org.junit.runner.RunWith;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 

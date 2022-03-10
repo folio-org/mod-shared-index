@@ -1,4 +1,4 @@
-package org.folio.reshare.index;
+package org.folio.shared.index;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
@@ -7,7 +7,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.folio.okapi.common.Config;
 import org.folio.okapi.common.ModuleVersionReporter;
-import org.folio.reshare.index.api.SharedIndexService;
+import org.folio.shared.index.api.SharedIndexService;
 import org.folio.tlib.RouterCreator;
 import org.folio.tlib.api.HealthApi;
 import org.folio.tlib.api.Tenant2Api;

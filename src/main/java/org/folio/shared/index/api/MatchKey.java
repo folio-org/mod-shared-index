@@ -1,4 +1,4 @@
-package org.folio.reshare.index.api;
+package org.folio.shared.index.api;
 
 import io.vertx.core.impl.logging.Logger;
 import io.vertx.core.impl.logging.LoggerFactory;

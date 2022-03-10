@@ -1,4 +1,4 @@
-package org.folio.reshare.index.storage;
+package org.folio.shared.index.storage;
 
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
