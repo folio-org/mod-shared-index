@@ -32,6 +32,7 @@ public class MainVerticleTest {
 
   static Vertx vertx;
   static final int MODULE_PORT = 9230;
+  static String tenant1 = "tenant1";
 
   @ClassRule
   public static PostgreSQLContainer<?> postgresSQLContainer = TenantPgPoolContainer.create();
@@ -45,7 +46,16 @@ public class MainVerticleTest {
 
     DeploymentOptions deploymentOptions = new DeploymentOptions();
     deploymentOptions.setConfig(new JsonObject().put("port", Integer.toString(MODULE_PORT)));
-    vertx.deployVerticle(new MainVerticle(), deploymentOptions).onComplete(context.asyncAssertSuccess());
+    vertx.deployVerticle(new MainVerticle(), deploymentOptions)
+        .onComplete(context.asyncAssertSuccess(res -> {
+          tenantOp(context, tenant1, new JsonObject().put("module_to", "mod-shared-index-1.0.0"), null);
+        }));
+  }
+
+  @AfterClass
+  public static void afterClass(TestContext context) {
+    tenantOp(context, tenant1, new JsonObject().put("module_from", "mod-shared-index-1.0.0"), null);
+    vertx.close().onComplete(context.asyncAssertSuccess());
   }
 
   /**
@@ -55,7 +65,7 @@ public class MainVerticleTest {
    * @param tenantAttributes tenant attributes as it would come from Okapi install.
    * @param expectedError error to expect (null for expecting no error)
    */
-  void tenantOp(TestContext context, String tenant, JsonObject tenantAttributes, String expectedError) {
+  static void tenantOp(TestContext context, String tenant, JsonObject tenantAttributes, String expectedError) {
     ExtractableResponse<Response> response = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant)
         .header("Content-Type", "application/json")
@@ -85,12 +95,6 @@ public class MainVerticleTest {
         .then().statusCode(204);
   }
 
-
-  @AfterClass
-  public static void afterClass(TestContext context) {
-    vertx.close(context.asyncAssertSuccess());
-  }
-
   @Test
   public void testAdminHealth() {
     RestAssured.given()
@@ -101,8 +105,9 @@ public class MainVerticleTest {
 
   @Test
   public void testGetSharedRecordsUnknownTenant() {
+    String tenant = "unknowntenant";
     RestAssured.given()
-        .header(XOkapiHeaders.TENANT, "unknowntenant")
+        .header(XOkapiHeaders.TENANT, tenant)
         .get("/shared-index/records")
         .then().statusCode(400)
         .header("Content-Type", is("text/plain"))
@@ -112,7 +117,7 @@ public class MainVerticleTest {
   @Test
   public void testGetSharedRecordsBadCqlField() {
     RestAssured.given()
-        .header(XOkapiHeaders.TENANT, "unknowntenant")
+        .header(XOkapiHeaders.TENANT, tenant1)
         .get("/shared-index/records?query=foo=bar")
         .then().statusCode(400)
         .header("Content-Type", is("text/plain"))
@@ -166,11 +171,31 @@ public class MainVerticleTest {
         .header("Content-Type", is("text/plain"))
         .body(is("ERROR: relation \"unknowntenant_mod_shared_index.bib_record\" does not exist (42P01)"));
   }
+
+  @Test
+  public void putSharedRecordsException(TestContext context) {
+    String sourceId = UUID.randomUUID().toString();
+    JsonArray records = new JsonArray()
+        .add(new JsonObject()
+            .put("localId", "HRID01")
+            .put("marcPayload", new JsonArray())
+            .put("inventoryPayload", new JsonObject().put("isbn", "1"))
+        );
+    JsonObject request = new JsonObject()
+        .put("sourceId", sourceId)
+        .put("records", records);
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(request.encode())
+        .put("/shared-index/records")
+        .then().statusCode(400)
+        .body(containsString("Validation error for body application/json: input don't match type OBJECT"));
+  }
+
   @Test
   public void putSharedRecords(TestContext context) {
-    String tenant = "tenant3";
-    tenantOp(context, tenant, new JsonObject().put("module_to", "mod-shared-index-1.0.0"), null);
-
     String sourceId = UUID.randomUUID().toString();
     JsonArray records = new JsonArray()
         .add(new JsonObject()
@@ -188,14 +213,14 @@ public class MainVerticleTest {
         .put("records", records);
 
     RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant)
+        .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
         .body(request.encode())
         .put("/shared-index/records")
         .then().statusCode(200);
 
     RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant)
+        .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
         .body(request.encode())
         .get("/shared-index/records")
@@ -206,7 +231,7 @@ public class MainVerticleTest {
         .body("resultInfo.totalRecords", is(2));
 
     RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant)
+        .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
         .body(request.encode())
         .get("/shared-index/records?query=sourceId==" + sourceId)
@@ -217,7 +242,7 @@ public class MainVerticleTest {
         .body("resultInfo.totalRecords", is(2));
 
     RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant)
+        .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
         .body(request.encode())
         .get("/shared-index/records?query=sourceId==" + UUID.randomUUID())
@@ -228,7 +253,7 @@ public class MainVerticleTest {
     for (int idx = 0; idx < records.size(); idx++) {
       JsonObject sharedRecord = records.getJsonObject(idx);
       RestAssured.given()
-          .header(XOkapiHeaders.TENANT, tenant)
+          .header(XOkapiHeaders.TENANT, tenant1)
           .header("Content-Type", "application/json")
           .body(request.encode())
           .get("/shared-index/records?query=localId==" + sharedRecord.getString("localId"))
@@ -239,18 +264,15 @@ public class MainVerticleTest {
           .body("items[0].sourceId", is(sourceId))
           .body("resultInfo.totalRecords", is(1));
     }
-    tenantOp(context, tenant, new JsonObject().put("module_from", "mod-shared-index-1.0.0"), null);
   }
 
   @Test
   public void upgradeDb(TestContext context) {
-    String tenant = "tenant3";
+    String tenant = "tenant2";
     tenantOp(context, tenant, new JsonObject()
         .put("module_to", "mod-shared-index-1.0.0"), null);
     tenantOp(context, tenant, new JsonObject()
         .put("module_from", "mod-shared-index-1.0.0")
         .put("module_to", "mod-shared-index-1.0.1"), null);
   }
-
-
 }
