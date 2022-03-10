@@ -29,41 +29,8 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     this.vertx = vertx;
   }
 
-  Future<Void> putSharedTitle(RoutingContext ctx) {
-    JsonObject requestJson = ctx.getBodyAsJson();
-
-    final String localIdentifier = requestJson.getString("localIdentifier");
-    final UUID libraryId = UUID.fromString(requestJson.getString("libraryId"));
-    final JsonObject source = requestJson.getJsonObject("source");
-    final JsonObject inventory = requestJson.getJsonObject("inventory");
-    MatchKey matchKey = new MatchKey(inventory.getJsonObject("instance"));
-    inventory.getJsonObject("instance").put("matchKey", matchKey.getKey());
-
-    return new Storage(ctx)
-        .upsertBibRecord(localIdentifier, libraryId, source, inventory)
-        .onSuccess(bibRecord -> ctx.response().setStatusCode(204).end());
-  }
-
   static String stringOrNull(RequestParameter requestParameter) {
     return requestParameter == null ? null : requestParameter.getString();
-  }
-
-  Future<Void> getSharedTitles(RoutingContext ctx) {
-    PgCqlQuery pgCqlQuery = PgCqlQuery.query();
-    pgCqlQuery.addField(
-        new PgCqlField("cql.allRecords", PgCqlField.Type.ALWAYS_MATCHES));
-    pgCqlQuery.addField(
-        new PgCqlField("id", PgCqlField.Type.UUID));
-    pgCqlQuery.addField(
-        new PgCqlField("local_identifier", "localIdentifier", PgCqlField.Type.TEXT));
-    pgCqlQuery.addField(
-        new PgCqlField("library_id", "libraryId", PgCqlField.Type.UUID));
-
-    RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
-    pgCqlQuery.parse(stringOrNull(params.queryParameter("query")));
-
-    Storage storage = new Storage(ctx);
-    return storage.getTitles(ctx, pgCqlQuery.getWhereClause(), pgCqlQuery.getOrderByClause());
   }
 
   Future<Void> putSharedRecords(RoutingContext ctx) {
@@ -131,8 +98,6 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
   public Future<Router> createRouter(Vertx vertx) {
     return RouterBuilder.create(vertx, "openapi/shared-index-1.0.yaml")
         .map(routerBuilder -> {
-          add(routerBuilder, "getSharedTitles", this::getSharedTitles);
-          add(routerBuilder, "putSharedTitle", this::putSharedTitle);
           add(routerBuilder, "putSharedRecords", this::putSharedRecords);
           add(routerBuilder, "getSharedRecords", this::getSharedRecords);
           return routerBuilder.createRouter();

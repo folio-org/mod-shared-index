@@ -101,52 +101,45 @@ public class MainVerticleTest {
   }
 
   @Test
-  public void testGetSharedTitlesUnknownTenant() {
+  public void testGetSharedRecordsUnknownTenant() {
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, "unknowntenant")
-        .get("/shared-index/shared-titles")
+        .get("/shared-index/records")
         .then().statusCode(400)
         .header("Content-Type", is("text/plain"))
         .body(is("ERROR: relation \"unknowntenant_mod_shared_index.bib_record\" does not exist (42P01)"));
   }
 
   @Test
-  public void testGetSharedTitlesBadCqlField() {
+  public void testGetSharedRecordsBadCqlField() {
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, "unknowntenant")
-        .get("/shared-index/shared-titles?query=foo=bar")
+        .get("/shared-index/records?query=foo=bar")
         .then().statusCode(400)
         .header("Content-Type", is("text/plain"))
         .body(is("Unsupported CQL index: foo"));
   }
 
   @Test
-  public void testGetSharedTitlesEmpty(TestContext context) {
-    String tenant = "tenant1";
-    tenantOp(context, tenant, new JsonObject().put("module_to", "mod-shared-index-1.0.0"), null);
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant)
-        .get("/shared-index/shared-titles")
-        .then().statusCode(200)
-        .header("Content-Type", is("application/json"))
-        .body("titles", empty())
-        .body("resultInfo.totalRecords", is(0));
-  }
-
-  @Test
   public void testBadTenantName() {
     String tenant = "1234"; // bad tenant name!
-    String libraryId = UUID.randomUUID().toString();
-    JsonObject sharedTitle = new JsonObject()
-        .put("localIdentifier", "HRID00121")
-        .put("libraryId", libraryId)
-        .put("source", new JsonObject())
-        .put("inventory", new JsonObject().put("instance", new JsonObject()));
+
+    String sourceId = UUID.randomUUID().toString();
+    JsonArray records = new JsonArray()
+        .add(new JsonObject()
+            .put("localId", "HRID01")
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("inventoryPayload", new JsonObject().put("isbn", "1"))
+        );
+    JsonObject request = new JsonObject()
+        .put("sourceId", sourceId)
+        .put("records", records);
+
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant)
         .header("Content-Type", "application/json")
-        .body(sharedTitle.encode())
-        .put("/shared-index/shared-titles")
+        .body(request.encode())
+        .put("/shared-index/records")
         .then().statusCode(400)
         .header("Content-Type", is("text/plain"))
         .body(containsString("X-Okapi-Tenant header must match"));
@@ -154,67 +147,26 @@ public class MainVerticleTest {
 
   @Test
   public void putSharedTitleUnknownTenant() {
-    String libraryId = UUID.randomUUID().toString();
-    JsonObject sharedTitle = new JsonObject()
-        .put("localIdentifier", "HRID00121")
-        .put("libraryId", libraryId)
-        .put("source", new JsonObject())
-        .put("inventory", new JsonObject().put("instance", new JsonObject()));
+    String sourceId = UUID.randomUUID().toString();
+    JsonArray records = new JsonArray()
+        .add(new JsonObject()
+            .put("localId", "HRID01")
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("inventoryPayload", new JsonObject().put("isbn", "1"))
+        );
+    JsonObject request = new JsonObject()
+        .put("sourceId", sourceId)
+        .put("records", records);
+
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, "unknowntenant")
         .header("Content-Type", "application/json")
-        .body(sharedTitle.encode())
-        .put("/shared-index/shared-titles")
+        .body(request.encode())
+        .put("/shared-index/records")
         .then().statusCode(400)
         .header("Content-Type", is("text/plain"))
         .body(is("ERROR: relation \"unknowntenant_mod_shared_index.bib_record\" does not exist (42P01)"));
   }
-
-  @Test
-  public void putSharedTitle(TestContext context) {
-    String tenant = "tenant2";
-    tenantOp(context, tenant, new JsonObject().put("module_to", "mod-shared-index-1.0.0"), null);
-
-    String libraryId = UUID.randomUUID().toString();
-    JsonObject sharedTitle = new JsonObject()
-        .put("localIdentifier", "HRID00121")
-        .put("libraryId", libraryId)
-        .put("source", new JsonObject())
-        .put("inventory", new JsonObject().put("instance", new JsonObject()));
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant)
-        .header("Content-Type", "application/json")
-        .body(sharedTitle.encode())
-        .put("/shared-index/shared-titles")
-        .then().statusCode(204);
-
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant)
-        .get("/shared-index/shared-titles")
-        .then().statusCode(200)
-        .header("Content-Type", is("application/json"))
-        .body("titles[0].localIdentifier", is("HRID00121"))
-        .body("titles[0].libraryId", is(libraryId))
-        .body("resultInfo.totalRecords", is(1));
-
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant)
-        .get("/shared-index/shared-titles?query=libraryId=" + libraryId)
-        .then().statusCode(200)
-        .header("Content-Type", is("application/json"))
-        .body("titles[0].localIdentifier", is("HRID00121"))
-        .body("titles[0].libraryId", is(libraryId))
-        .body("resultInfo.totalRecords", is(1));
-
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant)
-        .get("/shared-index/shared-titles?query=libraryId=" + UUID.randomUUID())
-        .then().statusCode(200)
-        .header("Content-Type", is("application/json"))
-        .body("titles", empty())
-        .body("resultInfo.totalRecords", is(0));
-  }
-
   @Test
   public void putSharedRecords(TestContext context) {
     String tenant = "tenant3";
