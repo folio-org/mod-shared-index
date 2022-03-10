@@ -92,20 +92,6 @@ public class Storage {
     ).mapEmpty();
   }
 
-  /**
-   * Inserts or updates an entry in the shared index.
-   */
-  public Future<Void> upsertBibRecord(
-      String localIdentifier,
-      UUID libraryId,
-      JsonObject source,
-      JsonObject inventory) {
-
-    return pool.getConnection()
-        .compose(conn -> upsertBibRecord(conn, localIdentifier, libraryId, source, inventory)
-            .eventually(y -> conn.close()));
-  }
-
   Future<Void> upsertBibRecord(
       SqlConnection conn,
       String localIdentifier,
