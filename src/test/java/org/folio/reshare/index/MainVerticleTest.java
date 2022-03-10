@@ -250,6 +250,8 @@ public class MainVerticleTest {
         .get("/shared-index/records")
         .then().statusCode(200)
         .body("items", hasSize(2))
+        .body("items[0].sourceId", is(sourceId))
+        .body("items[1].sourceId", is(sourceId))
         .body("resultInfo.totalRecords", is(2));
 
     RestAssured.given()
@@ -259,6 +261,8 @@ public class MainVerticleTest {
         .get("/shared-index/records?query=sourceId==" + sourceId)
         .then().statusCode(200)
         .body("items", hasSize(2))
+        .body("items[0].sourceId", is(sourceId))
+        .body("items[1].sourceId", is(sourceId))
         .body("resultInfo.totalRecords", is(2));
 
     RestAssured.given()
@@ -270,14 +274,20 @@ public class MainVerticleTest {
         .body("items", hasSize(0))
         .body("resultInfo.totalRecords", is(0));
 
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant)
-        .header("Content-Type", "application/json")
-        .body(request.encode())
-        .get("/shared-index/records?query=localId==" + records.getJsonObject(1).getString("localId"))
-        .then().statusCode(200)
-        .body("items", hasSize(1))
-        .body("resultInfo.totalRecords", is(1));
+    for (int idx = 0; idx < records.size(); idx++) {
+      JsonObject sharedRecord = records.getJsonObject(idx);
+      RestAssured.given()
+          .header(XOkapiHeaders.TENANT, tenant)
+          .header("Content-Type", "application/json")
+          .body(request.encode())
+          .get("/shared-index/records?query=localId==" + sharedRecord.getString("localId"))
+          .then().statusCode(200)
+          .body("items", hasSize(1))
+          .body("items[0].localId", is(sharedRecord.getString("localId")))
+          .body("items[0].payload.leader", is(sharedRecord.getJsonObject("marcPayload").getString("leader")))
+          .body("items[0].sourceId", is(sourceId))
+          .body("resultInfo.totalRecords", is(1));
+    }
   }
 
   @Test
