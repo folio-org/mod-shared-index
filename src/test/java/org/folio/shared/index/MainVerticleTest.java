@@ -239,6 +239,7 @@ public class MainVerticleTest {
           .body("items[0].sourceId", is(sourceId))
           .body("resultInfo.totalRecords", is(1));
     }
+    tenantOp(context, tenant, new JsonObject().put("module_from", "mod-shared-index-1.0.0"), null);
   }
 
   @Test
