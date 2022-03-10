@@ -21,26 +21,29 @@ public class MatchKeyJsonPathTest {
   public void matchKeyJsonPathNonConfigured() {
     MatchKeyMethod matchKeyMethod = new MatchKeyJsonPath();
     assertThat(matchKeyMethod.getName(), is("jsonpath"));
+    Buffer buffer = Buffer.buffer();
     Exception e = Assert.assertThrows(
         MatchKeyException.class,
-        () -> matchKeyMethod.getKeys(Buffer.buffer(), Buffer.buffer()));
+        () -> matchKeyMethod.getKeys(buffer, buffer));
     assertThat(e.getMessage(), is("Not configured"));
   }
 
   @Test
   public void matchKeyJsonPathConfigureBad() {
     MatchKeyMethod matchKeyMethod = new MatchKeyJsonPath();
+    JsonObject jsonObject = new JsonObject();
     Exception e = Assert.assertThrows(
         MatchKeyException.class,
-        () ->     matchKeyMethod.configure(new JsonObject()));
+        () ->     matchKeyMethod.configure(jsonObject));
     assertThat(e.getMessage(), is("jsonpath: either \"marc\" or \"inventory\" must be given"));
   }
 
   @Test
   public void matchKeyJsonPathConfigureInvalidJsonPath() {
     MatchKeyMethod matchKeyMethod = new MatchKeyJsonPath();
+    JsonObject configuration = new JsonObject().put("marc", "$.fields.010.subfields[x");
     Assert.assertThrows(InvalidPathException.class,
-        () -> matchKeyMethod.configure(new JsonObject().put("marc", "$.fields.010.subfields[x")));
+        () -> matchKeyMethod.configure(configuration));
   }
 
   @Test
