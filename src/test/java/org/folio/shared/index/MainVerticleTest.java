@@ -24,6 +24,7 @@ import org.junit.runner.RunWith;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 
@@ -192,6 +193,14 @@ public class MainVerticleTest {
 
   @Test
   public void matchKeysOK() {
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .get("/shared-index/config/matchkeys")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("matchKeys", is(empty()))
+        .body("resultInfo.totalRecords", is(0));
+
     JsonObject matchKey = new JsonObject()
         .put("id", "10a")
         .put("method", "jsonpath")
@@ -223,6 +232,48 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("application/json")
         .body(Matchers.is(matchKey.encode()));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .get("/shared-index/config/matchkeys")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("matchKeys", hasSize(1))
+        .body("matchKeys[0].id", is(matchKey.getString("id")))
+        .body("matchKeys[0].method", is(matchKey.getString("method")))
+        // should really check that params are same
+        .body("resultInfo.totalRecords", is(1));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .get("/shared-index/config/matchkeys?query=method=" + matchKey.getString("method"))
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("matchKeys", hasSize(1))
+        .body("matchKeys[0].id", is(matchKey.getString("id")))
+        .body("matchKeys[0].method", is(matchKey.getString("method")))
+        .body("resultInfo.totalRecords", is(1));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey.encode())
+        .delete("/shared-index/config/matchkeys/" + matchKey.getString("id"))
+        .then().statusCode(204);
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey.encode())
+        .delete("/shared-index/config/matchkeys/" + matchKey.getString("id"))
+        .then().statusCode(404);
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey.encode())
+        .get("/shared-index/config/matchkeys/" + matchKey.getString("id"))
+        .then().statusCode(404);
   }
 
   @Test

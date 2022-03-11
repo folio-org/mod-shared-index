@@ -91,6 +91,38 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     }).mapEmpty();
   }
 
+  Future<Void> deleteMatchKey(RoutingContext ctx) {
+    RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
+    String id = stringOrNull(params.pathParameter("id"));
+    Storage storage = new Storage(ctx);
+    return storage.deleteMatchKey(id).onSuccess(res -> {
+      if (!res) {
+        HttpResponse.responseError(ctx, 404, "MatchKey " + id + " not found");
+        return;
+      }
+      ctx.response().setStatusCode(204).end();
+    }).mapEmpty();
+  }
+
+
+  Future<Void> getMatchKeys(RoutingContext ctx) {
+    PgCqlQuery pgCqlQuery = PgCqlQuery.query();
+    pgCqlQuery.addField(
+        new PgCqlField("cql.allRecords", PgCqlField.Type.ALWAYS_MATCHES));
+    pgCqlQuery.addField(
+        new PgCqlField("id", PgCqlField.Type.TEXT));
+    pgCqlQuery.addField(
+        new PgCqlField("method", PgCqlField.Type.TEXT));
+
+    RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
+    pgCqlQuery.parse(stringOrNull(params.queryParameter("query")));
+
+    Storage storage = new Storage(ctx);
+    return storage.getMatchKeys(ctx, pgCqlQuery.getWhereClause(),
+        pgCqlQuery.getOrderByClause());
+  }
+
+
   static void failHandler(RoutingContext ctx) {
     Throwable t = ctx.failure();
     // both semantic errors and syntax errors are from same pile ... Choosing 400 over 422.
@@ -131,6 +163,8 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
           add(routerBuilder, "getSharedRecords", this::getSharedRecords);
           add(routerBuilder, "postMatchKey", this::postMatchKey);
           add(routerBuilder, "getMatchKey", this::getMatchKey);
+          add(routerBuilder, "deleteMatchKey", this::deleteMatchKey);
+          add(routerBuilder, "getMatchKeys", this::getMatchKeys);
           return routerBuilder.createRouter();
         });
   }

@@ -188,6 +188,38 @@ public class Storage {
         });
   }
 
+  /**
+   * Delete match key.
+   * @param id match key identifier
+   * @return TRUE if deleted; FALSE if not found
+   */
+  public Future<Boolean> deleteMatchKey(String id) {
+    return pool.preparedQuery(
+            "DELETE FROM " + matchKeyConfigTable + " WHERE id = $1")
+        .execute(Tuple.of(id))
+        .map(res -> res.rowCount() > 0);
+  }
+
+  /**
+   * Get match keys.
+   * @param ctx routing context
+   * @param sqlWhere SQL where caluse
+   * @param sqlOrderBy SQL order by clause
+   * @return
+   */
+  public Future<Void> getMatchKeys(RoutingContext ctx, String sqlWhere, String sqlOrderBy) {
+    String from = matchKeyConfigTable;
+    if (sqlWhere != null) {
+      from = from + " WHERE " + sqlWhere;
+    }
+    return streamResult(ctx, null, from, sqlOrderBy, "matchKeys",
+        row -> new JsonObject()
+            .put("id", row.getString("id"))
+            .put("method", row.getString("method"))
+            .put("params", row.getJsonObject("params")));
+  }
+
+
   private static JsonObject copyWithoutNulls(JsonObject obj) {
     JsonObject n = new JsonObject();
     obj.getMap().forEach((key, value) -> {
