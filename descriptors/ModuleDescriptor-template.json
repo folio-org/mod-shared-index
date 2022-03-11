@@ -1,6 +1,6 @@
 {
   "id": "${artifactId}-${version}",
-  "name": "Share Index Module",
+  "name": "Shared Index Module",
   "provides": [
     {
       "id": "_tenant",
