@@ -23,6 +23,8 @@ import org.apache.logging.log4j.Logger;
 import org.folio.tlib.postgres.TenantPgPool;
 import org.folio.tlib.util.TenantUtil;
 
+// Define a constant instead of duplicating this literal
+@java.lang.SuppressWarnings({"squid:S1192"})
 public class Storage {
   private static final Logger log = LogManager.getLogger(Storage.class);
 

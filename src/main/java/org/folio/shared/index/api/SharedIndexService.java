@@ -71,11 +71,11 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
       return Future.failedFuture("Non-existing method '" + method + "'");
     }
     JsonObject params = request.getJsonObject("params");
-    return storage.insertMatchKey(id, method, params).onSuccess(res -> {
-      HttpResponse.responseJson(ctx, 201)
-          .putHeader("Location", ctx.request().absoluteURI() + "/" + id)
-          .end(request.encode());
-    });
+    return storage.insertMatchKey(id, method, params).onSuccess(res ->
+        HttpResponse.responseJson(ctx, 201)
+            .putHeader("Location", ctx.request().absoluteURI() + "/" + id)
+            .end(request.encode())
+    );
   }
 
   Future<Void> getMatchKey(RoutingContext ctx) {
@@ -96,7 +96,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     String id = stringOrNull(params.pathParameter("id"));
     Storage storage = new Storage(ctx);
     return storage.deleteMatchKey(id).onSuccess(res -> {
-      if (!res) {
+      if (Boolean.FALSE.equals(res)) {
         HttpResponse.responseError(ctx, 404, "MatchKey " + id + " not found");
         return;
       }
