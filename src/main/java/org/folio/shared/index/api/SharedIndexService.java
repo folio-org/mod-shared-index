@@ -38,7 +38,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     Storage storage = new Storage(ctx);
     return storage.upsertSharedRecords(ctx.getBodyAsJson()).onSuccess(res -> {
       JsonArray ar = new JsonArray();
-      // global ids and match keys here..
+      // global ids and match keys here ...
       HttpResponse.responseJson(ctx, 200).end(ar.encode());
     });
   }

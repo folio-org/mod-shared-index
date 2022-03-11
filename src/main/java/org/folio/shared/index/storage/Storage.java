@@ -139,7 +139,7 @@ public class Storage {
    * @param ctx routing context
    * @param sqlWhere SQL where caluse
    * @param sqlOrderBy SQL order by clause
-   * @return
+   * @return async result
    */
   public Future<Void> getSharedRecords(RoutingContext ctx, String sqlWhere, String sqlOrderBy) {
     String from = bibRecordTable;
@@ -207,7 +207,7 @@ public class Storage {
    * @param ctx routing context
    * @param sqlWhere SQL where caluse
    * @param sqlOrderBy SQL order by clause
-   * @return
+   * @return async result
    */
   public Future<Void> getMatchKeys(RoutingContext ctx, String sqlWhere, String sqlOrderBy) {
     String from = matchKeyConfigTable;
