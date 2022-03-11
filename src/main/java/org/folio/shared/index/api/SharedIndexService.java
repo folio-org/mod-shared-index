@@ -13,6 +13,8 @@ import io.vertx.ext.web.validation.ValidationHandler;
 import java.util.function.Function;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.folio.okapi.common.HttpResponse;
+import org.folio.shared.index.matchkey.MatchKeyMethod;
 import org.folio.shared.index.storage.Storage;
 import org.folio.tlib.RouterCreator;
 import org.folio.tlib.TenantInitHooks;
@@ -37,8 +39,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     return storage.upsertSharedRecords(ctx.getBodyAsJson()).onSuccess(res -> {
       JsonArray ar = new JsonArray();
       // global ids and match keys here..
-      ctx.response().putHeader("Content-Type", "application/json");
-      ctx.response().end(ar.encode());
+      HttpResponse.responseJson(ctx, 200).end(ar.encode());
     });
   }
 
@@ -59,6 +60,35 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     Storage storage = new Storage(ctx);
     return storage.getSharedRecords(ctx, pgCqlQuery.getWhereClause(),
         pgCqlQuery.getOrderByClause());
+  }
+
+  Future<Void> postMatchKey(RoutingContext ctx) {
+    Storage storage = new Storage(ctx);
+    JsonObject request = ctx.getBodyAsJson();
+    String id = request.getString("id");
+    String method = request.getString("method");
+    if (MatchKeyMethod.get(method) == null) {
+      return Future.failedFuture("Non-existing method '" + method + "'");
+    }
+    JsonObject params = request.getJsonObject("params");
+    return storage.insertMatchKey(id, method, params).onSuccess(res -> {
+      HttpResponse.responseJson(ctx, 201)
+          .putHeader("Location", ctx.request().absoluteURI() + "/" + id)
+          .end(request.encode());
+    });
+  }
+
+  Future<Void> getMatchKey(RoutingContext ctx) {
+    RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
+    String id = stringOrNull(params.pathParameter("id"));
+    Storage storage = new Storage(ctx);
+    return storage.selectMatchKey(id).onSuccess(res -> {
+      if (res == null) {
+        HttpResponse.responseError(ctx, 404, "MatchKey " + id + " not found");
+        return;
+      }
+      HttpResponse.responseJson(ctx, 200).end(res.encode());
+    }).mapEmpty();
   }
 
   static void failHandler(RoutingContext ctx) {
@@ -99,6 +129,8 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
         .map(routerBuilder -> {
           add(routerBuilder, "putSharedRecords", this::putSharedRecords);
           add(routerBuilder, "getSharedRecords", this::getSharedRecords);
+          add(routerBuilder, "postMatchKey", this::postMatchKey);
+          add(routerBuilder, "getMatchKey", this::getMatchKey);
           return routerBuilder.createRouter();
         });
   }

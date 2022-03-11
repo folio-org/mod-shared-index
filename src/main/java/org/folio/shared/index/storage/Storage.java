@@ -8,6 +8,7 @@ import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.validation.RequestParameters;
 import io.vertx.ext.web.validation.ValidationHandler;
 import io.vertx.sqlclient.Row;
+import io.vertx.sqlclient.RowIterator;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.RowStream;
 import io.vertx.sqlclient.SqlConnection;
@@ -71,19 +72,15 @@ public class Storage {
                 + " (jsonb_array_elements((inventory->>'holdingsRecords')::JSONB)->>'items')::JSONB"
                 + ") item FROM " + bibRecordTable,
             CREATE_IF_NO_EXISTS + matchKeyConfigTable
-                + "(id uuid NOT NULL PRIMARY KEY,"
-                + " code VARCHAR, "
-                + " name VARCHAR)",
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_match_config_code ON " + matchKeyConfigTable
-                + " (code)",
+                + "(id VARCHAR NOT NULL PRIMARY KEY,"
+                + " method VARCHAR, "
+                + " params JSONB)",
             CREATE_IF_NO_EXISTS + matchKeyValueTable
                 + "(bib_record_id uuid NOT NULL,"
                 + " match_key_config_id uuid NOT NULL,"
                 + " match_value VARCHAR NOT NULL,"
                 + " CONSTRAINT match_key_value_fk_bib_record FOREIGN KEY "
-                + "                (bib_record_id) REFERENCES " + bibRecordTable + ", "
-                + " CONSTRAINT match_key_config_fk_type FOREIGN KEY "
-                + "                (match_key_config_id) REFERENCES " + matchKeyConfigTable + ")",
+                + "                (bib_record_id) REFERENCES " + bibRecordTable + ")",
             "CREATE UNIQUE INDEX IF NOT EXISTS match_key_value_idx ON " + matchKeyValueTable
                 + " (match_key_config_id, match_value, bib_record_id)",
             "CREATE INDEX IF NOT EXISTS match_key_value_bib_id_idX ON " + matchKeyValueTable
@@ -153,6 +150,42 @@ public class Storage {
             .put("localId", row.getString("local_identifier"))
             .put("sourceId", row.getUUID("library_id"))
             .put("payload", row.getJsonObject("source")));
+  }
+
+  /**
+   * Insert match key into storage.
+   * @param id match key id (user specified)
+   * @param method match key method
+   * @param params configuration
+   * @return async result
+   */
+  public Future<Void> insertMatchKey(String id, String method, JsonObject params) {
+    return pool.preparedQuery(
+        "INSERT INTO " + matchKeyConfigTable + " (id, method, params) VALUES ($1, $2, $3)")
+        .execute(Tuple.of(id, method, params))
+        .mapEmpty();
+  }
+
+  /**
+   * Select match key from storage.
+   * @param id match key id (user specified)
+   * @return JSON object if found; null if not found
+   */
+  public Future<JsonObject> selectMatchKey(String id) {
+    return pool.preparedQuery(
+            "SELECT * FROM " + matchKeyConfigTable + " WHERE id = $1")
+        .execute(Tuple.of(id))
+        .map(res -> {
+          RowIterator<Row> iterator = res.iterator();
+          if (!iterator.hasNext()) {
+            return null;
+          }
+          Row row = iterator.next();
+          return new JsonObject()
+              .put("id", row.getString("id"))
+              .put("method", row.getString("method"))
+              .put("params", row.getJsonObject("params"));
+        });
   }
 
   private static JsonObject copyWithoutNulls(JsonObject obj) {

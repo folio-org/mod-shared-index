@@ -20,7 +20,6 @@ public class MatchKeyJsonPathTest {
   @Test
   public void matchKeyJsonPathNonConfigured() {
     MatchKeyMethod matchKeyMethod = new MatchKeyJsonPath();
-    assertThat(matchKeyMethod.getName(), is("jsonpath"));
     Buffer buffer = Buffer.buffer();
     Exception e = Assert.assertThrows(
         MatchKeyException.class,

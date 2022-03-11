@@ -16,11 +16,6 @@ public class MatchKeyJsonPath implements MatchKeyMethod {
   JsonPath jsonPathInventory;
 
   @Override
-  public String getName() {
-    return "jsonpath";
-  }
-
-  @Override
   public void configure(JsonObject configuration) {
     String expr = configuration.getString("marc");
     if (expr != null) {

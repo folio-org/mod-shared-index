@@ -15,6 +15,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.folio.okapi.common.XOkapiHeaders;
 import org.folio.tlib.postgres.testing.TenantPgPoolContainer;
+import org.hamcrest.Matchers;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
@@ -47,9 +48,9 @@ public class MainVerticleTest {
     DeploymentOptions deploymentOptions = new DeploymentOptions();
     deploymentOptions.setConfig(new JsonObject().put("port", Integer.toString(MODULE_PORT)));
     vertx.deployVerticle(new MainVerticle(), deploymentOptions)
-        .onComplete(context.asyncAssertSuccess(res -> {
-          tenantOp(context, tenant1, new JsonObject().put("module_to", "mod-shared-index-1.0.0"), null);
-        }));
+        .onComplete(context.asyncAssertSuccess(res ->
+            tenantOp(context, tenant1, new JsonObject().put("module_to", "mod-shared-index-1.0.0"), null)
+        ));
   }
 
   @AfterClass
@@ -173,7 +174,59 @@ public class MainVerticleTest {
   }
 
   @Test
-  public void putSharedRecordsException(TestContext context) {
+  public void matchKeysNonExistingMethod() {
+    JsonObject matchKey = new JsonObject()
+        .put("id", "xx")
+        .put("method", "other")
+        .put("params", new JsonObject());
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey.encode())
+        .post("/shared-index/config/matchkeys")
+        .then().statusCode(400)
+        .contentType("text/plain")
+        .body(Matchers.is("Non-existing method 'other'"));
+  }
+
+  @Test
+  public void matchKeysOK() {
+    JsonObject matchKey = new JsonObject()
+        .put("id", "10a")
+        .put("method", "jsonpath")
+        .put("params",new JsonObject().put("marc", "$.fields.010.subfields[*].a"));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey.encode())
+        .get("/shared-index/config/matchkeys/" + matchKey.getString("id"))
+        .then().statusCode(404)
+        .contentType("text/plain")
+        .body(Matchers.is("MatchKey " + matchKey.getString("id") + " not found"));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey.encode())
+        .post("/shared-index/config/matchkeys")
+        .then().statusCode(201)
+        .contentType("application/json")
+        .body(Matchers.is(matchKey.encode()));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey.encode())
+        .get("/shared-index/config/matchkeys/" + matchKey.getString("id"))
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body(Matchers.is(matchKey.encode()));
+  }
+
+  @Test
+  public void putSharedRecordsException() {
     String sourceId = UUID.randomUUID().toString();
     JsonArray records = new JsonArray()
         .add(new JsonObject()
@@ -195,7 +248,7 @@ public class MainVerticleTest {
   }
 
   @Test
-  public void putSharedRecords(TestContext context) {
+  public void putSharedRecords() {
     String sourceId = UUID.randomUUID().toString();
     JsonArray records = new JsonArray()
         .add(new JsonObject()

@@ -3,9 +3,15 @@ package org.folio.shared.index.matchkey;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.json.JsonObject;
 import java.util.List;
+import org.folio.shared.index.matchkey.impl.MatchKeyJsonPath;
 
 public interface MatchKeyMethod {
-  String getName();
+  static MatchKeyMethod get(String method) {
+    if ("jsonpath".equals(method)) {
+      return new MatchKeyJsonPath();
+    }
+    return null;
+  }
 
   void configure(JsonObject configuration);
 
