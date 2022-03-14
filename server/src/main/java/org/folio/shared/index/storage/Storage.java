@@ -61,18 +61,13 @@ public class Storage {
             "SET search_path TO " + pool.getSchema(),
             CREATE_IF_NO_EXISTS + bibRecordTable
                 + "(id uuid NOT NULL PRIMARY KEY,"
-                + "local_id VARCHAR NOT NULL,"
-                + "source_id uuid NOT NULL,"
-                + "source JSONB NOT NULL,"
-                + "inventory JSONB"
+                + " local_id VARCHAR NOT NULL,"
+                + " source_id uuid NOT NULL,"
+                + " marc_payload JSONB NOT NULL,"
+                + " inventory_payload JSONB"
                 + ")",
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_local_id ON " + bibRecordTable
                 + " (local_id, source_id)",
-            "CREATE OR REPLACE VIEW " + itemView
-                + " AS SELECT id, local_id, source_id,"
-                + " jsonb_array_elements("
-                + " (jsonb_array_elements((inventory->>'holdingsRecords')::JSONB)->>'items')::JSONB"
-                + ") item FROM " + bibRecordTable,
             CREATE_IF_NO_EXISTS + matchKeyConfigTable
                 + "(id VARCHAR NOT NULL PRIMARY KEY,"
                 + " method VARCHAR, "
@@ -94,26 +89,26 @@ public class Storage {
   Future<Void> upsertBibRecord(
       SqlConnection conn,
       String localIdentifier,
-      UUID libraryId,
-      JsonObject source,
-      JsonObject inventory) {
+      UUID sourceId,
+      JsonObject marcPayload,
+      JsonObject inventoryPayload) {
 
     return conn.preparedQuery(
         "INSERT INTO " + bibRecordTable
-            + " (id, local_id, source_id, source, inventory)"
+            + " (id, local_id, source_id, marc_payload, inventory_payload)"
             + " VALUES ($1, $2, $3, $4, $5)"
             + " ON CONFLICT (local_id, source_id) DO UPDATE "
-            + " SET source = $4, "
-            + "     inventory = $5").execute(
-        Tuple.of(UUID.randomUUID(), localIdentifier, libraryId, source, inventory)
+            + " SET marc_payload = $4, "
+            + "     inventory_payload = $5").execute(
+        Tuple.of(UUID.randomUUID(), localIdentifier, sourceId, marcPayload, inventoryPayload)
     ).mapEmpty();
   }
 
   Future<Void> upsertSharedRecord(SqlConnection conn, UUID sourceId, JsonObject sharedRecord) {
     final String localIdentifier = sharedRecord.getString("localId");
-    final JsonObject source = sharedRecord.getJsonObject("marcPayload");
-    final JsonObject inventory = sharedRecord.getJsonObject("inventoryPayload");
-    return upsertBibRecord(conn, localIdentifier, sourceId, source, inventory);
+    final JsonObject marcPayload = sharedRecord.getJsonObject("marcPayload");
+    final JsonObject inventoryPayload = sharedRecord.getJsonObject("inventoryPayload");
+    return upsertBibRecord(conn, localIdentifier, sourceId, marcPayload, inventoryPayload);
   }
 
   /**
@@ -151,7 +146,7 @@ public class Storage {
             .put("globalId", row.getUUID("id"))
             .put("localId", row.getString("local_id"))
             .put("sourceId", row.getUUID("source_id"))
-            .put("payload", row.getJsonObject("source")));
+            .put("payload", row.getJsonObject("marc_payload")));
   }
 
   /**
