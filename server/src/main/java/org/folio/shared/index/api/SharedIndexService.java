@@ -52,7 +52,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     pgCqlQuery.addField(
         new PgCqlField("local_id", "localId", PgCqlField.Type.TEXT));
     pgCqlQuery.addField(
-        new PgCqlField("library_id", "sourceId", PgCqlField.Type.UUID));
+        new PgCqlField("source_id", "sourceId", PgCqlField.Type.UUID));
 
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     pgCqlQuery.parse(stringOrNull(params.queryParameter("query")));
