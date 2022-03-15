@@ -1,7 +1,6 @@
 package org.folio.shared.index.client;
 
 import io.vertx.core.Future;
-import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.client.WebClient;
@@ -29,12 +28,10 @@ public class Client {
   int chunkSize = 1;
   Integer localSequence = 0;
   WebClient webClient;
-  Vertx vertx;
   Map<String,String> headers = new HashMap<>();
 
-  public Client(WebClient webClient, Vertx vertx) {
+  public Client(WebClient webClient) {
     this.webClient = webClient;
-    this.vertx = vertx;
   }
 
   public void setSourceId(UUID sourceId) {
@@ -113,14 +110,13 @@ public class Client {
 
   /** Execute command line shared-index client.
    *
-   * @param vertx Vertx. handle
    * @param webClient web client
    * @param args command line args
    * @return async result
    */
-  public static Future<Void> exec(Vertx vertx, WebClient webClient, String[] args) {
+  public static Future<Void> exec(WebClient webClient, String[] args) {
     try {
-      Client client = new Client(webClient, vertx);
+      Client client = new Client(webClient);
       Future<Void> future = Future.succeededFuture();
       int i = 0;
       while (i < args.length) {

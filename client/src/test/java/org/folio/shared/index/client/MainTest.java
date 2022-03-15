@@ -45,7 +45,7 @@ public class MainTest {
   @Test
   public void fileNotFound(TestContext context) {
     String [] args = { "unknownfile" };
-    Client.exec(vertx, webClient, args).onComplete(context.asyncAssertFailure(x -> {
+    Client.exec(webClient, args).onComplete(context.asyncAssertFailure(x -> {
       context.assertEquals("java.io.FileNotFoundException: unknownfile (No such file or directory)", x.getMessage());
     }));
   }
@@ -53,7 +53,7 @@ public class MainTest {
   @Test
   public void badArgs(TestContext context) {
     String [] args = { "--bad", "value" };
-    Client.exec(vertx, webClient, args).onComplete(context.asyncAssertFailure(x -> {
+    Client.exec(webClient, args).onComplete(context.asyncAssertFailure(x -> {
       context.assertEquals("Unsupported option: '--bad'", x.getMessage());
     }));
   }
@@ -61,7 +61,7 @@ public class MainTest {
   @Test
   public void missingArgs(TestContext context) {
     String [] args = { "--chunk" };
-    Client.exec(vertx, webClient, args).onComplete(context.asyncAssertFailure(x -> {
+    Client.exec(webClient, args).onComplete(context.asyncAssertFailure(x -> {
       context.assertEquals("Missing argument for option '--chunk'", x.getMessage());
     }));
   }
@@ -69,7 +69,7 @@ public class MainTest {
   @Test
   public void help(TestContext context) {
     String [] args = { "--help" };
-    Client.exec(vertx, webClient, args).onComplete(context.asyncAssertSuccess());
+    Client.exec(webClient, args).onComplete(context.asyncAssertSuccess());
   }
 
   @Test
@@ -100,7 +100,7 @@ public class MainTest {
             "--tenant", "testlib",
             "--source", sourceId.toString(),
             "src/test/resources/marc3.marc"};
-    future = future.compose(x -> Client.exec(vertx, webClient, args));
+    future = future.compose(x -> Client.exec(webClient, args));
 
     future.eventually(x -> httpServer.close())
         .onComplete(context.asyncAssertSuccess(res -> {
