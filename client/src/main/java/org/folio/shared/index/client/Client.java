@@ -9,6 +9,7 @@ import io.vertx.ext.web.client.predicate.ResponsePredicate;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
@@ -90,7 +91,7 @@ public class Client {
         .expect(ResponsePredicate.SC_OK)
         .expect(ResponsePredicate.JSON)
         .sendJsonObject(request)
-        .onFailure(x -> promise.fail(x))
+        .onFailure(promise::fail)
         .onSuccess(x -> sendChunk(reader, promise));
   }
 
@@ -132,7 +133,7 @@ public class Client {
               .expect(ResponsePredicate.SC_OK)
               .expect(ResponsePredicate.JSON).send()
               .compose(res2 -> {
-                if (!res2.bodyAsJsonObject().getBoolean("complete")) {
+                if (Boolean.FALSE.equals(res2.bodyAsJsonObject().getBoolean("complete"))) {
                   throw new ClientException("Incomplete job");
                 }
                 String error = res2.bodyAsJsonObject().getString("error");
@@ -156,14 +157,21 @@ public class Client {
    * @param fname filename
    * @return async result
    */
-  public Future<Void> sendFile(String fname)  {
-    InputStream stream;
+  public Future<Void> sendFile(String fname) {
     try {
-      stream = new FileInputStream(fname);
+      InputStream stream = new FileInputStream(fname);
+      return Future.<Void>future(p -> sendChunk(new MarcStreamReader(stream), p))
+          .eventually(x -> {
+            try {
+              stream.close();
+              return Future.succeededFuture();
+            } catch (IOException e) {
+              return Future.failedFuture(e);
+            }
+          });
     } catch (FileNotFoundException e) {
-      throw new ClientException(e);
+      return Future.failedFuture(e);
     }
-    return Future.future(p -> sendChunk(new MarcStreamReader(stream), p));
   }
 
   private static String getArgument(String [] args, int i) {

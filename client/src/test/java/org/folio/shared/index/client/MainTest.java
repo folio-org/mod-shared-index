@@ -37,16 +37,17 @@ public class MainTest {
   }
 
   @Test
-  public void noArgs() {
+  public void noArgs(TestContext context) {
     String [] args = {};
     Main.main(args);
+    Client.exec(webClient, args).onComplete(context.asyncAssertSuccess());
   }
 
   @Test
   public void fileNotFound(TestContext context) {
     String [] args = { "unknownfile" };
     Client.exec(webClient, args).onComplete(context.asyncAssertFailure(x -> {
-      context.assertEquals("java.io.FileNotFoundException: unknownfile (No such file or directory)", x.getMessage());
+      context.assertEquals("unknownfile (No such file or directory)", x.getMessage());
     }));
   }
 
