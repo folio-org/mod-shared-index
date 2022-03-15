@@ -1,6 +1,7 @@
 package org.folio.shared.index.client;
 
 import io.vertx.core.Future;
+import io.vertx.core.Promise;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.client.WebClient;
@@ -50,7 +51,7 @@ public class Client {
     this.okapiUrl = okapiUrl;
   }
 
-  private Future<Void> sendChunk(MarcStreamReader reader) {
+  private void sendChunk(MarcStreamReader reader, Promise<Void> promise) {
     JsonArray records = new JsonArray();
     while (reader.hasNext() && records.size() < chunkSize) {
       org.marc4j.marc.Record marcRecord = reader.next();
@@ -72,18 +73,82 @@ public class Client {
           .put("inventoryPayload", inventoryPayload));
     }
     if (records.isEmpty()) {
-      return Future.succeededFuture();
+      log.info("{}", localSequence);
+      promise.complete();
+      return;
     }
     JsonObject request = new JsonObject()
         .put("sourceId", sourceId)
         .put("records", records);
 
-    return webClient.putAbs(okapiUrl + "/shared-index/records")
+    if ((localSequence % 1000) == 0) {
+      log.info("{}", localSequence);
+    }
+    webClient.putAbs(okapiUrl + "/shared-index/records")
         .putHeader(XOkapiHeaders.TENANT, tenant)
         .putHeader(XOkapiHeaders.URL, okapiUrl)
         .expect(ResponsePredicate.SC_OK)
         .expect(ResponsePredicate.JSON)
-        .sendJsonObject(request).compose(x -> sendChunk(reader));
+        .sendJsonObject(request)
+        .onFailure(x -> promise.fail(x))
+        .onSuccess(x -> sendChunk(reader, promise));
+  }
+
+  /**
+   * Initialize data for the tenant.
+   * @return async result
+   */
+  public Future<Void> init() {
+    JsonObject request = new JsonObject()
+        .put("module_to", "mod-shared-index-1.0.0");
+    return tenantOp(request);
+  }
+
+  /**
+   * Initialize data for the tenant.
+   * @return async result
+   */
+  public Future<Void> purge() {
+    JsonObject request = new JsonObject()
+        .put("purge", Boolean.TRUE)
+        .put("module_to", "mod-shared-index-1.0.0");
+    return tenantOp(request);
+  }
+
+  private Future<Void> tenantOp(JsonObject request) {
+    return webClient.postAbs(okapiUrl + "/_/tenant")
+        .putHeader(XOkapiHeaders.TENANT, tenant)
+        .putHeader(XOkapiHeaders.URL, okapiUrl)
+        .sendJsonObject(request).compose(res -> {
+          if (res.statusCode() == 204 || res.statusCode() == 200) {
+            return Future.succeededFuture();
+          } else if (res.statusCode() != 201) {
+            throw new ClientException("For /_/tenant got status code " + res.statusCode());
+          }
+          String id = res.bodyAsJsonObject().getString("id");
+          return webClient.getAbs(okapiUrl + "/_/tenant/" + id + "?wait=10000")
+              .putHeader(XOkapiHeaders.TENANT, tenant)
+              .putHeader(XOkapiHeaders.URL, okapiUrl)
+              .expect(ResponsePredicate.SC_OK)
+              .expect(ResponsePredicate.JSON).send()
+              .compose(res2 -> {
+                if (!res2.bodyAsJsonObject().getBoolean("complete")) {
+                  throw new ClientException("Incomplete job");
+                }
+                String error = res2.bodyAsJsonObject().getString("error");
+                if (error != null) {
+                  return Future.failedFuture(error);
+                }
+                return Future.succeededFuture();
+              })
+              .compose(x ->
+                webClient.deleteAbs(okapiUrl + "/_/tenant/" + id)
+                    .putHeader(XOkapiHeaders.TENANT, tenant)
+                    .putHeader(XOkapiHeaders.URL, okapiUrl)
+                    .expect(ResponsePredicate.SC_NO_CONTENT)
+                    .send().mapEmpty()
+              );
+        });
   }
 
   /**
@@ -98,7 +163,7 @@ public class Client {
     } catch (FileNotFoundException e) {
       throw new ClientException(e);
     }
-    return sendChunk(new MarcStreamReader(stream));
+    return Future.future(p -> sendChunk(new MarcStreamReader(stream), p));
   }
 
   private static String getArgument(String [] args, int i) {
@@ -128,6 +193,8 @@ public class Client {
               log.info(" --okapiurl url      (defaults to http://localhost:9130)");
               log.info(" --tenant tenant     (defaults to \"testlib\")");
               log.info(" --chunk sz          (defaults to 1)");
+              log.info(" --init");
+              log.info(" --purge");
               break;
             case "source":
               client.setSourceId(UUID.fromString(getArgument(args, ++i)));
@@ -140,6 +207,12 @@ public class Client {
               break;
             case "chunk":
               client.setChunkSize(Integer.parseInt(getArgument(args, ++i)));
+              break;
+            case "init":
+              future = future.compose(x -> client.init());
+              break;
+            case "purge":
+              future = future.compose(x -> client.purge());
               break;
             default:
               throw new ClientException("Unsupported option: '" + args[i] + "'");

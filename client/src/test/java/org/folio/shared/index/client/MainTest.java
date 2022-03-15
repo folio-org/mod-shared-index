@@ -73,11 +73,65 @@ public class MainTest {
   }
 
   @Test
-  public void server(TestContext context) {
+  public void init(TestContext context) {
+    UUID jobId = UUID.randomUUID();
+
+    HttpServerOptions so = new HttpServerOptions()
+        .setHandle100ContinueAutomatically(true);
+    HttpServer httpServer = vertx.createHttpServer(so);
+    Router router = Router.router(vertx);
+
+    router.post("/_/tenant")
+        .handler(BodyHandler.create())
+        .handler(c -> {
+          if (Boolean.TRUE.equals(c.getBodyAsJson().getBoolean("purge"))) {
+            c.response().setStatusCode(204);
+            c.response().end();
+            return;
+          }
+          c.response().setStatusCode(201);
+          c.response().putHeader("Content-Type", "application/json");
+          c.response().end(new JsonObject()
+              .put("id", jobId.toString())
+              .encode());
+        });
+    router.getWithRegex("/_/tenant/" + jobId)
+        .handler(c -> {
+          c.response().setStatusCode(200);
+          c.response().putHeader("Content-Type", "application/json");
+          c.response().end(new JsonObject()
+              .put("id", jobId.toString())
+              .put("complete", Boolean.TRUE)
+              .encode());
+        });
+    router.deleteWithRegex("/_/tenant/" + jobId)
+        .handler(c -> {
+          c.response().setStatusCode(204);
+          c.response().end();
+        });
+
+    httpServer.requestHandler(router);
+    Future<Void> future = httpServer.listen(PORT).mapEmpty();
+
+    UUID sourceId = UUID.randomUUID();
+    String [] args =
+        { "--okapiurl", "http://localhost:" + PORT,
+            "--tenant", "testlib",
+            "--source", sourceId.toString(),
+            "--purge",
+            "--init"};
+    future = future.compose(x -> Client.exec(webClient, args));
+    future.eventually(x -> httpServer.close())
+        .onComplete(context.asyncAssertSuccess());
+  }
+
+  @Test
+  public void sendFile(TestContext context) {
     HttpServerOptions so = new HttpServerOptions()
         .setHandle100ContinueAutomatically(true);
 
     JsonArray requests = new JsonArray();
+    UUID jobId = UUID.randomUUID();
 
     HttpServer httpServer = vertx.createHttpServer(so);
     Router router = Router.router(vertx);
