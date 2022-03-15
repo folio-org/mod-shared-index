@@ -99,8 +99,64 @@ public class Client {
     try {
       stream = new FileInputStream(fname);
     } catch (FileNotFoundException e) {
-      throw new RuntimeException(e);
+      throw new ClientException(e);
     }
     return sendChunk(new MarcStreamReader(stream));
+  }
+
+  private static String getArgument(String [] args, int i) {
+    if (i >= args.length) {
+      throw new ClientException("Missing argument for option '" + args[i - 1] + "'");
+    }
+    return args[i];
+  }
+
+  /** Execute command line shared-index client.
+   *
+   * @param vertx Vertx. handle
+   * @param webClient web client
+   * @param args command line args
+   * @return async result
+   */
+  public static Future<Void> exec(Vertx vertx, WebClient webClient, String[] args) {
+    try {
+      Client client = new Client(webClient, vertx);
+      Future<Void> future = Future.succeededFuture();
+      int i = 0;
+      while (i < args.length) {
+        if (args[i].startsWith("--")) {
+          switch (args[i].substring(2)) {
+            case "help":
+              log.info("[options] [file..]");
+              log.info(" --source sourceId   (defaults to random UUID)");
+              log.info(" --okapiurl url      (defaults to http://localhost:9130)");
+              log.info(" --tenant tenant     (defaults to \"testlib\")");
+              log.info(" --chunk sz          (defaults to 1)");
+              break;
+            case "source":
+              client.setSourceId(UUID.fromString(getArgument(args, ++i)));
+              break;
+            case "okapiurl":
+              client.setOkapiUrl(getArgument(args, ++i));
+              break;
+            case "tenant":
+              client.setTenant(getArgument(args, ++i));
+              break;
+            case "chunk":
+              client.setChunkSize(Integer.parseInt(getArgument(args, ++i)));
+              break;
+            default:
+              throw new ClientException("Unsupported option: '" + args[i] + "'");
+          }
+        } else {
+          String fname = args[i];
+          future = future.compose(x -> client.sendFile(fname));
+        }
+        i++;
+      }
+      return future;
+    } catch (Exception e) {
+      return Future.failedFuture(e);
+    }
   }
 }

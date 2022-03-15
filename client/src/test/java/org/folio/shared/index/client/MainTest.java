@@ -11,12 +11,11 @@ import io.vertx.ext.unit.junit.VertxUnitRunner;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.client.WebClient;
 import io.vertx.ext.web.handler.BodyHandler;
+import java.util.UUID;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import java.util.UUID;
 
 @RunWith(VertxUnitRunner.class)
 public class MainTest {
@@ -46,7 +45,7 @@ public class MainTest {
   @Test
   public void fileNotFound(TestContext context) {
     String [] args = { "unknownfile" };
-    Main.mainClient(vertx, webClient, args).onComplete(context.asyncAssertFailure(x -> {
+    Client.exec(vertx, webClient, args).onComplete(context.asyncAssertFailure(x -> {
       context.assertEquals("java.io.FileNotFoundException: unknownfile (No such file or directory)", x.getMessage());
     }));
   }
@@ -54,7 +53,7 @@ public class MainTest {
   @Test
   public void badArgs(TestContext context) {
     String [] args = { "--bad", "value" };
-    Main.mainClient(vertx, webClient, args).onComplete(context.asyncAssertFailure(x -> {
+    Client.exec(vertx, webClient, args).onComplete(context.asyncAssertFailure(x -> {
       context.assertEquals("Unsupported option: '--bad'", x.getMessage());
     }));
   }
@@ -62,7 +61,7 @@ public class MainTest {
   @Test
   public void missingArgs(TestContext context) {
     String [] args = { "--chunk" };
-    Main.mainClient(vertx, webClient, args).onComplete(context.asyncAssertFailure(x -> {
+    Client.exec(vertx, webClient, args).onComplete(context.asyncAssertFailure(x -> {
       context.assertEquals("Missing argument for option '--chunk'", x.getMessage());
     }));
   }
@@ -70,7 +69,7 @@ public class MainTest {
   @Test
   public void help(TestContext context) {
     String [] args = { "--help" };
-    Main.mainClient(vertx, webClient, args).onComplete(context.asyncAssertSuccess());
+    Client.exec(vertx, webClient, args).onComplete(context.asyncAssertSuccess());
   }
 
   @Test
@@ -78,7 +77,6 @@ public class MainTest {
     HttpServerOptions so = new HttpServerOptions()
         .setHandle100ContinueAutomatically(true);
 
-    UUID sourceId = UUID.randomUUID();
     JsonArray requests = new JsonArray();
 
     HttpServer httpServer = vertx.createHttpServer(so);
@@ -95,13 +93,14 @@ public class MainTest {
     httpServer.requestHandler(router);
     Future<Void> future = httpServer.listen(PORT).mapEmpty();
 
+    UUID sourceId = UUID.randomUUID();
     String [] args =
         { "--okapiurl", "http://localhost:" + PORT,
             "--chunk", "2",
             "--tenant", "testlib",
             "--source", sourceId.toString(),
             "src/test/resources/marc3.marc"};
-    future = future.compose(x -> Main.mainClient(vertx, webClient, args));
+    future = future.compose(x -> Client.exec(vertx, webClient, args));
 
     future.eventually(x -> httpServer.close())
         .onComplete(context.asyncAssertSuccess(res -> {
