@@ -12,7 +12,7 @@ public class Main {
 
   private static String getArgument(String [] args, int i) {
     if (i >= args.length) {
-      throw new RuntimeException("Missing argument for option '" + args[i] + "'");
+      throw new RuntimeException("Missing argument for option '" + args[i - 1] + "'");
     }
     return args[i];
   }
