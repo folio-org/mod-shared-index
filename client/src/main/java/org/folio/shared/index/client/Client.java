@@ -157,6 +157,8 @@ public class Client {
    * @param fname filename
    * @return async result
    */
+  @java.lang.SuppressWarnings({"squid:S2095"}) // Resources should be closed
+  // stream.close in eventually , *not* in finally as that would premature close the stream.
   public Future<Void> sendFile(String fname) {
     try {
       InputStream stream = new FileInputStream(fname);
