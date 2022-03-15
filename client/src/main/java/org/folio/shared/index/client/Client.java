@@ -176,9 +176,6 @@ public class Client {
     }
   }
 
-  public Future<Void> sendXML(String fname) {
-
-  }
   private static String getArgument(String [] args, int i) {
     if (i >= args.length) {
       throw new ClientException("Missing argument for option '" + args[i - 1] + "'");
