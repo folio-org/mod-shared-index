@@ -8,7 +8,7 @@ import javax.xml.stream.XMLStreamReader;
 public class XmlJsonUtil {
   private XmlJsonUtil() { }
 
-  private static String encodeValue(String s) {
+  private static String encodeXmlText(String s) {
     StringBuilder res = new StringBuilder();
     for (int i = 0; i < s.length(); i++) {
       char c = s.charAt(i);
@@ -49,44 +49,48 @@ public class XmlJsonUtil {
   public static String getNextSubDocument(String nodeName, XMLStreamReader reader)
       throws XMLStreamException {
 
-    Buffer buffer = Buffer.buffer();
-    int level = -1;
     while (reader.hasNext()) {
       int event = reader.next();
-      if (level == -1 && event == XMLStreamConstants.START_ELEMENT
+      if (event == XMLStreamConstants.START_ELEMENT
           && nodeName.equals(reader.getLocalName())) {
-        level = 0;
-      }
-      if (level >= 0) {
-        switch (event) {
-          case XMLStreamConstants.START_ELEMENT:
-            level++;
-            buffer.appendString("<").appendString(reader.getLocalName());
-            for (int i = 0; i < reader.getAttributeCount(); i++) {
-              buffer
-                  .appendString(" ")
-                  .appendString(reader.getAttributeLocalName(i))
-                  .appendString("=\"")
-                  .appendString(encodeValue(reader.getAttributeValue(i)))
-                  .appendString("\"");
-            }
-            buffer.appendString(">");
-            break;
-          case XMLStreamConstants.END_ELEMENT:
-            level--;
-            buffer.appendString("</").appendString(reader.getLocalName()).appendString(">");
-            if (level == 0) {
-              return buffer.toString();
-            }
-            break;
-          case XMLStreamConstants.CHARACTERS:
-            buffer.appendString(encodeValue(reader.getText()));
-            break;
-          default:
-        }
+        return getNextSubDocument(event, reader);
       }
     }
     return null;
   }
 
+  private static String getNextSubDocument(int event, XMLStreamReader reader)
+      throws XMLStreamException {
+    int level = 0;
+    Buffer buffer = Buffer.buffer();
+    for (;;) {
+      switch (event) {
+        case XMLStreamConstants.START_ELEMENT:
+          level++;
+          buffer.appendString("<").appendString(reader.getLocalName());
+          for (int i = 0; i < reader.getAttributeCount(); i++) {
+            buffer
+                .appendString(" ")
+                .appendString(reader.getAttributeLocalName(i))
+                .appendString("=\"")
+                .appendString(encodeXmlText(reader.getAttributeValue(i)))
+                .appendString("\"");
+          }
+          buffer.appendString(">");
+          break;
+        case XMLStreamConstants.END_ELEMENT:
+          level--;
+          buffer.appendString("</").appendString(reader.getLocalName()).appendString(">");
+          if (level == 0) {
+            return buffer.toString();
+          }
+          break;
+        case XMLStreamConstants.CHARACTERS:
+          buffer.appendString(encodeXmlText(reader.getText()));
+          break;
+        default:
+      }
+      event = reader.next();
+    }
+  }
 }
