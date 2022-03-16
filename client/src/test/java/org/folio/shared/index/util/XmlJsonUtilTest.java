@@ -9,6 +9,7 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.Source;
 import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.stream.StreamResult;
@@ -101,5 +102,14 @@ public class XmlJsonUtilTest {
       }
     }
     Assert.assertEquals(10, no);
+  }
+
+  @Test
+  public void loadInventoryInstanceXsl()  {
+    TransformerFactory transformerFactory = TransformerFactory.newInstance();
+    Source xslt = new StreamSource("src/test/resources/marc2inventory-instance.xsl");
+    TransformerConfigurationException transformerConfigurationException =
+        Assert.assertThrows(TransformerConfigurationException.class, () -> transformerFactory.newTransformer(xslt));
+    System.out.println(transformerConfigurationException.getMessage());
   }
 }
