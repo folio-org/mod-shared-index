@@ -73,43 +73,43 @@
                 <xsl:for-each select="marc:datafield[@tag='001' or @tag='010' or @tag='020' or @tag='022' or @tag='024' or @tag='028' or @tag='035' or @tag='074']">
                     <i>
                     <xsl:choose>
-                        <xsl:when test="current()[@tag='010'] and marc:subfield[@code='a']">
+			    <xsl:when test="@tag='010' and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
                         <identifierTypeId>c858e4f2-2b6b-4385-842b-60732ee14abb</identifierTypeId> <!-- LCCN -->
                         </xsl:when>
-                        <xsl:when test="current()[@tag='020'] and marc:subfield[@code='a']">
+                        <xsl:when test="@tag='020' and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
                         <identifierTypeId>8261054f-be78-422d-bd51-4ed9f33c3422</identifierTypeId> <!-- ISBN -->
                         </xsl:when>
-                        <xsl:when test="current()[@tag='022'] and marc:subfield[@code='a']">
+                        <xsl:when test="@tag='022' and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
                         <identifierTypeId>913300b2-03ed-469a-8179-c1092c991227</identifierTypeId> <!-- ISSN -->
                         </xsl:when>
-                        <xsl:when test="current()[@tag='024'] and marc:subfield[@code='a']">
+                        <xsl:when test="@tag='024' and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
                         <identifierTypeId>2e8b3b6c-0e7d-4e48-bca2-b0b23b376af5</identifierTypeId> <!-- Other standard identifier -->
                         </xsl:when>
-                        <xsl:when test="current()[@tag='028'] and marc:subfield[@code='a']">
+                        <xsl:when test="@tag='028' and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
                         <identifierTypeId>b5d8cdc4-9441-487c-90cf-0c7ec97728eb</identifierTypeId> <!-- Publisher number -->
                         </xsl:when>
-                        <xsl:when test="current()[@tag='035'] and marc:subfield[@code='a']">
+                        <xsl:when test="@tag='035' and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
                         <identifierTypeId>7e591197-f335-4afb-bc6d-a6d76ca3bace</identifierTypeId> <!-- System control number -->
                         </xsl:when>
-                        <xsl:when test="current()[@tag='074'] and marc:subfield[@code='a']">
+                        <xsl:when test="@tag='074' and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
@@ -129,7 +129,7 @@
                     <xsl:for-each select="marc:datafield[@tag='050' or @tag='060' or @tag='080' or @tag='082' or @tag='086' or @tag='090']">
                     <i>
                         <xsl:choose>
-                        <xsl:when test="current()[@tag='050']">
+                        <xsl:when test="@tag='050'">
                             <classificationNumber>
                             <xsl:for-each select="marc:subfield[@code='a' or @code='b']">
                                 <xsl:if test="position() > 1">
@@ -140,7 +140,7 @@
                             </classificationNumber>
                             <classificationTypeId>ce176ace-a53e-4b4d-aa89-725ed7b2edac</classificationTypeId> <!-- LC, Library of Congress -->
                         </xsl:when>
-                        <xsl:when test="current()[@tag='082']">
+                        <xsl:when test="@tag='082'">
                             <classificationNumber>
                             <xsl:for-each select="marc:subfield[@code='a' or @code='b']">
                                 <xsl:if test="position() > 1">
@@ -151,7 +151,7 @@
                             </classificationNumber>
                             <classificationTypeId>42471af9-7d25-4f3a-bf78-60d29dcf463b</classificationTypeId> <!-- Dewey -->
                         </xsl:when>
-                        <xsl:when test="current()[@tag='086']">
+                        <xsl:when test="@tag='086'">
                             <classificationNumber>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                             </classificationNumber>
