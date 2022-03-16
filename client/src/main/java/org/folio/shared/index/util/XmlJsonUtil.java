@@ -41,26 +41,12 @@ public class XmlJsonUtil {
    * <p>This method does not care about namespaces. Only elements (local names), attributes
    * and text is dealt with.
    *
-   * @param nodeName the node that is matched and is the root element of returned document
+   * @param event event type for node that begins the subdocument
    * @param reader XML stream reader
    * @return XML document string; null if no more documents in stream
    * @throws XMLStreamException if there's an exception for the XML stream
    */
-  public static String getNextSubDocument(String nodeName, XMLStreamReader reader)
-      throws XMLStreamException {
-
-    while (reader.hasNext()) {
-      int event = reader.next();
-      if (event == XMLStreamConstants.START_ELEMENT
-          && nodeName.equals(reader.getLocalName())) {
-        return getNextSubDocument(event, reader);
-      }
-    }
-    return null;
-  }
-
-  private static String getNextSubDocument(int event, XMLStreamReader reader)
-      throws XMLStreamException {
+  public static String getSubDocument(int event, XMLStreamReader reader) throws XMLStreamException {
     int level = 0;
     Buffer buffer = Buffer.buffer();
     for (;;) {
@@ -68,6 +54,15 @@ public class XmlJsonUtil {
         case XMLStreamConstants.START_ELEMENT:
           level++;
           buffer.appendString("<").appendString(reader.getLocalName());
+          if (level == 1) {
+            String uri = reader.getNamespaceURI();
+            if (uri != null) {
+              buffer
+                  .appendString(" xmlns=\"")
+                  .appendString(uri)
+                  .appendString("\"");
+            }
+          }
           for (int i = 0; i < reader.getAttributeCount(); i++) {
             buffer
                 .appendString(" ")
