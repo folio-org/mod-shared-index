@@ -61,6 +61,10 @@
       <artifactId>rest-assured</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>net.sf.saxon</groupId>
+      <artifactId>Saxon-HE</artifactId>
+    </dependency>
     <!-- logging see http://www.slf4j.org/legacy.html -->
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>

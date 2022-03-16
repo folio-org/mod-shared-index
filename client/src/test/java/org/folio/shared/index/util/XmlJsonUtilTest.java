@@ -9,7 +9,6 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.Source;
 import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.stream.StreamResult;
@@ -105,11 +104,26 @@ public class XmlJsonUtilTest {
   }
 
   @Test
-  public void loadInventoryInstanceXsl()  {
-    TransformerFactory transformerFactory = TransformerFactory.newInstance();
-    Source xslt = new StreamSource("src/test/resources/marc2inventory-instance.xsl");
-    TransformerConfigurationException transformerConfigurationException =
-        Assert.assertThrows(TransformerConfigurationException.class, () -> transformerFactory.newTransformer(xslt));
-    System.out.println(transformerConfigurationException.getMessage());
+  public void testMarc2Inventory() throws FileNotFoundException, XMLStreamException, TransformerException {
+    InputStream stream = new FileInputStream("src/test/resources/record10.xml");
+    XMLInputFactory factory = XMLInputFactory.newInstance();
+    XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
+    int no = 0;
+    while (xmlStreamReader.hasNext()) {
+      int event = xmlStreamReader.next();
+      if (event == XMLStreamConstants.START_ELEMENT && "record".equals(xmlStreamReader.getLocalName())) {
+        String doc = XmlJsonUtil.getSubDocument(event, xmlStreamReader);
+        TransformerFactory transformerFactory = TransformerFactory.newInstance();
+        Source xslt = new StreamSource("src/test/resources/marc2inventory-instance.xsl");
+        Transformer transformer = transformerFactory.newTransformer(xslt);
+        Source source = new StreamSource(new StringReader(doc));
+        StreamResult result = new StreamResult(new StringWriter());
+        transformer.transform(source, result);
+        String s = result.getWriter().toString();
+        Assert.assertTrue(s, s.contains("<localIdentifier>"));
+        no++;
+      }
+    }
+    Assert.assertEquals(10, no);
   }
 }

@@ -108,6 +108,11 @@
         <artifactId>junit</artifactId>
         <version>4.13.2</version>
       </dependency>
+      <dependency>
+        <groupId>net.sf.saxon</groupId>
+        <artifactId>Saxon-HE</artifactId>
+        <version>10.7</version>
+      </dependency>
     </dependencies>
 
   </dependencyManagement>
