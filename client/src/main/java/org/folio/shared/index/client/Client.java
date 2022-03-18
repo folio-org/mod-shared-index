@@ -8,18 +8,35 @@ import io.vertx.ext.web.client.WebClient;
 import io.vertx.ext.web.client.predicate.ResponsePredicate;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringReader;
+import java.io.StringWriter;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamConstants;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
+import javax.xml.transform.Source;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.folio.okapi.common.XOkapiHeaders;
+import org.folio.shared.index.util.XmlJsonUtil;
 import org.marc4j.MarcJsonWriter;
 import org.marc4j.MarcStreamReader;
 import org.marc4j.converter.impl.AnselToUnicode;
+import org.xml.sax.SAXException;
 
 public class Client {
   static final Logger log = LogManager.getLogger(Client.class);
@@ -31,6 +48,8 @@ public class Client {
   Integer localSequence = 0;
   WebClient webClient;
   Map<String,String> headers = new HashMap<>();
+  TransformerFactory transformerFactory = TransformerFactory.newInstance();
+  List<Transformer> transformers = new LinkedList<>();
 
   public Client(WebClient webClient) {
     this.webClient = webClient;
@@ -52,7 +71,7 @@ public class Client {
     this.okapiUrl = okapiUrl;
   }
 
-  private void sendChunk(MarcStreamReader reader, Promise<Void> promise) {
+  private void sendIso2709Chunk(MarcStreamReader reader, Promise<Void> promise) {
     JsonArray records = new JsonArray();
     while (reader.hasNext() && records.size() < chunkSize) {
       org.marc4j.marc.Record marcRecord = reader.next();
@@ -74,6 +93,61 @@ public class Client {
           .put("inventoryPayload", inventoryPayload));
     }
     if (records.isEmpty()) {
+      promise.complete();
+      return;
+    }
+    JsonObject request = new JsonObject()
+        .put("sourceId", sourceId)
+        .put("records", records);
+
+    if ((localSequence % 1000) == 0) {
+      log.info("{}", localSequence);
+    }
+    webClient.putAbs(okapiUrl + "/shared-index/records")
+        .putHeader(XOkapiHeaders.TENANT, tenant)
+        .putHeader(XOkapiHeaders.URL, okapiUrl)
+        .expect(ResponsePredicate.SC_OK)
+        .expect(ResponsePredicate.JSON)
+        .sendJsonObject(request)
+        .onFailure(promise::fail)
+        .onSuccess(x -> sendIso2709Chunk(reader, promise));
+  }
+
+  private static JsonObject createIngestRecord(String marcXml, List<Transformer> transformers)
+      throws TransformerException, ParserConfigurationException, IOException, SAXException {
+
+    String inventory = marcXml;
+    for (Transformer transformer : transformers) {
+      Source source = new StreamSource(new StringReader(inventory));
+      StreamResult result = new StreamResult(new StringWriter());
+      transformer.transform(source, result);
+      inventory = result.getWriter().toString();
+    }
+    JsonObject marcPayload = XmlJsonUtil.convertMarcXmlToJson(marcXml);
+    JsonObject inventoryPayload = transformers.isEmpty()
+        ? new JsonObject() : XmlJsonUtil.convertMarcXmlToJson(marcXml);
+    return new JsonObject()
+        .put("localId", "foo")
+        .put("marcPayload", marcPayload)
+        .put("inventoryPayload", inventoryPayload);
+  }
+
+  private void sendMarcXmlChunk(XMLStreamReader stream, Promise<Void> promise)  {
+    JsonArray records = new JsonArray();
+    try {
+      while (stream.hasNext() && records.size() < chunkSize) {
+        int event = stream.next();
+        if (event == XMLStreamConstants.START_ELEMENT && "record".equals(stream.getLocalName())) {
+          String marcXml = XmlJsonUtil.getSubDocument(event, stream);
+          records.add(createIngestRecord(marcXml, transformers));
+        }
+      }
+    } catch (XMLStreamException | TransformerException | IOException
+        | ParserConfigurationException | SAXException e) {
+      promise.fail(e);
+      return;
+    }
+    if (records.isEmpty()) {
       log.info("{}", localSequence);
       promise.complete();
       return;
@@ -92,7 +166,7 @@ public class Client {
         .expect(ResponsePredicate.JSON)
         .sendJsonObject(request)
         .onFailure(promise::fail)
-        .onSuccess(x -> sendChunk(reader, promise));
+        .onSuccess(x -> sendMarcXmlChunk(stream, promise));
   }
 
   /**
@@ -152,8 +226,34 @@ public class Client {
         });
   }
 
+  Future<Void> sendIso2709(InputStream stream) {
+    return Future.<Void>future(p -> sendIso2709Chunk(new MarcStreamReader(stream), p))
+        .eventually(x -> {
+          try {
+            stream.close();
+            return Future.succeededFuture();
+          } catch (IOException e) {
+            return Future.failedFuture(e);
+          }
+        });
+  }
+
+  Future<Void> sendMarcXml(InputStream stream) throws XMLStreamException {
+    XMLInputFactory factory = XMLInputFactory.newInstance();
+    XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
+    return Future.<Void>future(p -> sendMarcXmlChunk(xmlStreamReader, p))
+        .eventually(x -> {
+          try {
+            stream.close();
+            return Future.succeededFuture();
+          } catch (IOException e) {
+            return Future.failedFuture(e);
+          }
+        });
+  }
+
   /**
-   * Send file with ISO2709 to shared-index.
+   * Send file to shared-index server.
    * @param fname filename
    * @return async result
    */
@@ -162,16 +262,31 @@ public class Client {
   public Future<Void> sendFile(String fname) {
     try {
       InputStream stream = new FileInputStream(fname);
-      return Future.<Void>future(p -> sendChunk(new MarcStreamReader(stream), p))
-          .eventually(x -> {
-            try {
-              stream.close();
-              return Future.succeededFuture();
-            } catch (IOException e) {
-              return Future.failedFuture(e);
-            }
-          });
-    } catch (FileNotFoundException e) {
+      if (fname.endsWith(".rec") || fname.endsWith(".marc") || fname.endsWith(".mrc")) {
+        return sendIso2709(stream);
+      } else if (fname.endsWith(".xml")) {
+        return sendMarcXml(stream);
+      } else {
+        stream.close();
+        return Future.failedFuture("filename '" + fname + "' must be end with"
+            + " .xml (marcxml) or .rec (iso2709)");
+      }
+    } catch (XMLStreamException | IOException e) {
+      return Future.failedFuture(e);
+    }
+  }
+
+  /**
+   * Add XSLT to the be used for each record.
+   * @param fname filename of XSL stylesheet
+   * @return async result
+   */
+  public Future<Void> setXslt(String fname) {
+    try {
+      Source xslt = new StreamSource(fname);
+      transformers.add(transformerFactory.newTransformer(xslt));
+      return Future.succeededFuture();
+    } catch (TransformerConfigurationException e) {
       return Future.failedFuture(e);
     }
   }
@@ -195,6 +310,7 @@ public class Client {
       Future<Void> future = Future.succeededFuture();
       int i = 0;
       while (i < args.length) {
+        String arg;
         if (args[i].startsWith("--")) {
           switch (args[i].substring(2)) {
             case "help":
@@ -203,20 +319,29 @@ public class Client {
               log.info(" --okapiurl url      (defaults to http://localhost:9130)");
               log.info(" --tenant tenant     (defaults to \"testlib\")");
               log.info(" --chunk sz          (defaults to 1)");
+              log.info("  -xsl file          (xslt transform for inventory payload)");
               log.info(" --init");
               log.info(" --purge");
               break;
             case "source":
-              client.setSourceId(UUID.fromString(getArgument(args, ++i)));
+              arg = getArgument(args, ++i);
+              client.setSourceId(UUID.fromString(arg));
               break;
             case "okapiurl":
-              client.setOkapiUrl(getArgument(args, ++i));
+              arg = getArgument(args, ++i);
+              client.setOkapiUrl(arg);
               break;
             case "tenant":
-              client.setTenant(getArgument(args, ++i));
+              arg = getArgument(args, ++i);
+              client.setTenant(arg);
               break;
             case "chunk":
-              client.setChunkSize(Integer.parseInt(getArgument(args, ++i)));
+              arg = getArgument(args, ++i);
+              client.setChunkSize(Integer.parseInt(arg));
+              break;
+            case "xsl":
+              arg = getArgument(args, ++i);
+              future = future.compose(x -> client.setXslt(arg));
               break;
             case "init":
               future = future.compose(x -> client.init());
@@ -228,8 +353,8 @@ public class Client {
               throw new ClientException("Unsupported option: '" + args[i] + "'");
           }
         } else {
-          String fname = args[i];
-          future = future.compose(x -> client.sendFile(fname));
+          arg = args[i];
+          future = future.compose(x -> client.sendFile(arg));
         }
         i++;
       }
