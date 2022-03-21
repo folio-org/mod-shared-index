@@ -34,6 +34,9 @@ public class XmlJsonUtilTest {
           + "   <datafield tag=\"010\" ind1=\" \" ind2=\"&amp;\">\n"
           + "      <subfield code=\"a\">   70207870</subfield>\n"
           + "   </datafield>\n"
+          + "   <datafield tag=\"245\">\n"
+          + "      <subfield code=\"a\">Title</subfield>\n"
+          + "   </datafield>\n"
           + " </record>";
 
   @Test
@@ -149,6 +152,13 @@ public class XmlJsonUtilTest {
                     .put("subfields", new JsonArray()
                         .add(new JsonObject()
                             .put("a", "   70207870"))
+                    )
+                )
+            )
+            .add(new JsonObject().put("245", new JsonObject()
+                    .put("subfields", new JsonArray()
+                        .add(new JsonObject()
+                            .put("a", "Title"))
                     )
                 )
             )
