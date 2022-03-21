@@ -99,10 +99,31 @@ public class XmlJsonUtil {
         fields.add(field);
       }
     }
-    if (fields.size() > 0) {
+    if (!fields.isEmpty()) {
       marcJson.put("fields", fields);
     }
     return marcJson;
+  }
+
+  /**
+   * Convert "inventory" XML to JSON.
+   * @param xml inventory XML
+   * @return json object without original record
+   * @throws ParserConfigurationException parser configuration exception
+   * @throws IOException i/o exception
+   * @throws SAXException sax parser exception
+   */
+  public static JsonObject inventoryXmlToJson(String xml)
+      throws ParserConfigurationException, IOException, SAXException {
+
+    DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
+    documentBuilderFactory.setNamespaceAware(true);
+    documentBuilderFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+
+    DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
+    Document document = documentBuilder.parse(new InputSource(new StringReader(xml)));
+    Element root = document.getDocumentElement();
+    return new JsonObject();
   }
 
   private static String encodeXmlText(String s) {

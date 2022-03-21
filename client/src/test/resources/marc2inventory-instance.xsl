@@ -4,8 +4,6 @@
     xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
     xmlns:marc="http://www.loc.gov/MARC21/slim">
 
-    <xsl:import href="map-relator-to-contributor-type.xsl"/>
-    
     <xsl:output indent="yes" method="xml" version="1.0" encoding="UTF-8"/>
 
     <xsl:template match="/">
@@ -38,21 +36,21 @@
             <instanceTypeId>
                 <!-- UUIDs for resource types -->
                 <xsl:choose>
-                <xsl:when test="substring(marc:leader,7,1)='a'">6312d172-f0cf-40f6-b27d-9fa8feaf332f</xsl:when> <!-- language material : text -->
-                <xsl:when test="substring(marc:leader,7,1)='c'">497b5090-3da2-486c-b57f-de5bb3c2e26d</xsl:when> <!-- notated music : notated music -->
-                <xsl:when test="substring(marc:leader,7,1)='d'">497b5090-3da2-486c-b57f-de5bb3c2e26d</xsl:when> <!-- manuscript notated music : notated music -> notated music -->
-                <xsl:when test="substring(marc:leader,7,1)='e'">526aa04d-9289-4511-8866-349299592c18</xsl:when> <!-- cartographic material : cartographic image -->
-                <xsl:when test="substring(marc:leader,7,1)='f'">a2c91e87-6bab-44d6-8adb-1fd02481fc4f</xsl:when> <!-- other --> <!-- manuscript cartographic material : ? -->
-                <xsl:when test="substring(marc:leader,7,1)='g'">535e3160-763a-42f9-b0c0-d8ed7df6e2a2</xsl:when> <!-- projected image : still image -->
-                <xsl:when test="substring(marc:leader,7,1)='i'">9bce18bd-45bf-4949-8fa8-63163e4b7d7f</xsl:when> <!-- nonmusical sound recording : sounds -->
-                <xsl:when test="substring(marc:leader,7,1)='j'">3be24c14-3551-4180-9292-26a786649c8b</xsl:when> <!-- musical sound recording : performed music -->
-                <xsl:when test="substring(marc:leader,7,1)='k'">a2c91e87-6bab-44d6-8adb-1fd02481fc4f</xsl:when> <!-- other --> <!-- two-dimensional nonprojectable graphic : ?-->
-                <xsl:when test="substring(marc:leader,7,1)='m'">df5dddff-9c30-4507-8b82-119ff972d4d7</xsl:when> <!-- computer file : computer dataset -->
-                <xsl:when test="substring(marc:leader,7,1)='o'">a2c91e87-6bab-44d6-8adb-1fd02481fc4f</xsl:when> <!-- kit : other -->
-                <xsl:when test="substring(marc:leader,7,1)='p'">a2c91e87-6bab-44d6-8adb-1fd02481fc4f</xsl:when> <!-- mixed material : other -->
-                <xsl:when test="substring(marc:leader,7,1)='r'">c1e95c2b-4efc-48cf-9e71-edb622cf0c22</xsl:when> <!-- three-dimensional artifact or naturally occurring object : three-dimensional form -->
-                <xsl:when test="substring(marc:leader,7,1)='t'">6312d172-f0cf-40f6-b27d-9fa8feaf332f</xsl:when> <!-- manuscript language material : text -->
-                <xsl:otherwise>a2c91e87-6bab-44d6-8adb-1fd02481fc4f</xsl:otherwise>                             <!--  : other -->
+                <xsl:when test="substring(marc:leader,7,1)='a'">txt</xsl:when> <!-- language material : text -->
+                <xsl:when test="substring(marc:leader,7,1)='c'">ntm</xsl:when> <!-- notated music : notated music -->
+                <xsl:when test="substring(marc:leader,7,1)='d'">ntm</xsl:when> <!-- manuscript notated music : notated music -> notated music -->
+                <xsl:when test="substring(marc:leader,7,1)='e'">cri</xsl:when> <!-- cartographic material : cartographic image -->
+                <xsl:when test="substring(marc:leader,7,1)='f'">xxx</xsl:when> <!-- other --> <!-- manuscript cartographic material : ? -->
+                <xsl:when test="substring(marc:leader,7,1)='g'">sti</xsl:when> <!-- projected image : still image -->
+                <xsl:when test="substring(marc:leader,7,1)='i'">snd</xsl:when> <!-- nonmusical sound recording : sounds -->
+                <xsl:when test="substring(marc:leader,7,1)='j'">prm</xsl:when> <!-- musical sound recording : performed music -->
+                <xsl:when test="substring(marc:leader,7,1)='k'">xxx</xsl:when> <!-- other --> <!-- two-dimensional nonprojectable graphic : ?-->
+                <xsl:when test="substring(marc:leader,7,1)='m'">cod</xsl:when> <!-- computer file : computer dataset -->
+                <xsl:when test="substring(marc:leader,7,1)='o'">xxx</xsl:when> <!-- kit : other -->
+                <xsl:when test="substring(marc:leader,7,1)='p'">xxx</xsl:when> <!-- mixed material : other -->
+                <xsl:when test="substring(marc:leader,7,1)='r'">tdf</xsl:when> <!-- three-dimensional artifact or naturally occurring object : three-dimensional form -->
+                <xsl:when test="substring(marc:leader,7,1)='t'">txt</xsl:when> <!-- manuscript language material : text -->
+                <xsl:otherwise>xxx</xsl:otherwise>                             <!--  : other -->
                 </xsl:choose>
             </instanceTypeId>
 
@@ -73,47 +71,47 @@
                 <xsl:for-each select="marc:datafield[@tag='001' or @tag='010' or @tag='020' or @tag='022' or @tag='024' or @tag='028' or @tag='035' or @tag='074']">
                     <i>
                     <xsl:choose>
-			    <xsl:when test="@tag='010' and marc:subfield[@code='a']">
+                        <xsl:when test="current()[@tag='010'] and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
-                        <identifierTypeId>c858e4f2-2b6b-4385-842b-60732ee14abb</identifierTypeId> <!-- LCCN -->
+                        <identifierTypeId>LCCN</identifierTypeId> <!-- LCCN -->
                         </xsl:when>
-                        <xsl:when test="@tag='020' and marc:subfield[@code='a']">
+                        <xsl:when test="current()[@tag='020'] and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
-                        <identifierTypeId>8261054f-be78-422d-bd51-4ed9f33c3422</identifierTypeId> <!-- ISBN -->
+                        <identifierTypeId>ISBN</identifierTypeId> <!-- ISBN -->
                         </xsl:when>
-                        <xsl:when test="@tag='022' and marc:subfield[@code='a']">
+                        <xsl:when test="current()[@tag='022'] and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
-                        <identifierTypeId>913300b2-03ed-469a-8179-c1092c991227</identifierTypeId> <!-- ISSN -->
+                        <identifierTypeId>ISSN</identifierTypeId> <!-- ISSN -->
                         </xsl:when>
-                        <xsl:when test="@tag='024' and marc:subfield[@code='a']">
+                        <xsl:when test="current()[@tag='024'] and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
-                        <identifierTypeId>2e8b3b6c-0e7d-4e48-bca2-b0b23b376af5</identifierTypeId> <!-- Other standard identifier -->
+                        <identifierTypeId>Other standard identifier</identifierTypeId> <!-- Other standard identifier -->
                         </xsl:when>
-                        <xsl:when test="@tag='028' and marc:subfield[@code='a']">
+                        <xsl:when test="current()[@tag='028'] and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
-                        <identifierTypeId>b5d8cdc4-9441-487c-90cf-0c7ec97728eb</identifierTypeId> <!-- Publisher number -->
+                        <identifierTypeId>Publisher or distributor number</identifierTypeId> <!-- Publisher number -->
                         </xsl:when>
-                        <xsl:when test="@tag='035' and marc:subfield[@code='a']">
+                        <xsl:when test="current()[@tag='035'] and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
-                        <identifierTypeId>7e591197-f335-4afb-bc6d-a6d76ca3bace</identifierTypeId> <!-- System control number -->
+                        <identifierTypeId>System control number</identifierTypeId> <!-- System control number -->
                         </xsl:when>
-                        <xsl:when test="@tag='074' and marc:subfield[@code='a']">
+                        <xsl:when test="current()[@tag='074'] and marc:subfield[@code='a']">
                         <value>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                         </value>
-                        <identifierTypeId>351ebc1c-3aae-4825-8765-c6d50dbf011f</identifierTypeId> <!-- GPO item number -->
+                        <identifierTypeId>GPO item number</identifierTypeId> <!-- GPO item number -->
                         </xsl:when>
                     </xsl:choose>
                     </i>
@@ -129,7 +127,7 @@
                     <xsl:for-each select="marc:datafield[@tag='050' or @tag='060' or @tag='080' or @tag='082' or @tag='086' or @tag='090']">
                     <i>
                         <xsl:choose>
-                        <xsl:when test="@tag='050'">
+                        <xsl:when test="current()[@tag='050']">
                             <classificationNumber>
                             <xsl:for-each select="marc:subfield[@code='a' or @code='b']">
                                 <xsl:if test="position() > 1">
@@ -138,9 +136,9 @@
                             <xsl:value-of select="."/>
                             </xsl:for-each>
                             </classificationNumber>
-                            <classificationTypeId>ce176ace-a53e-4b4d-aa89-725ed7b2edac</classificationTypeId> <!-- LC, Library of Congress -->
+                            <classificationTypeId>LC</classificationTypeId> <!-- LC, Library of Congress -->
                         </xsl:when>
-                        <xsl:when test="@tag='082'">
+                        <xsl:when test="current()[@tag='082']">
                             <classificationNumber>
                             <xsl:for-each select="marc:subfield[@code='a' or @code='b']">
                                 <xsl:if test="position() > 1">
@@ -149,13 +147,13 @@
                             <xsl:value-of select="."/>
                             </xsl:for-each>
                             </classificationNumber>
-                            <classificationTypeId>42471af9-7d25-4f3a-bf78-60d29dcf463b</classificationTypeId> <!-- Dewey -->
+                            <classificationTypeId>Dewey</classificationTypeId> <!-- Dewey -->
                         </xsl:when>
-                        <xsl:when test="@tag='086'">
+                        <xsl:when test="current()[@tag='086']">
                             <classificationNumber>
                             <xsl:value-of select="marc:subfield[@code='a']"/>
                             </classificationNumber>
-                            <classificationTypeId>9075b5f8-7d97-49e1-a431-73fdd468d476</classificationTypeId> <!-- SUDOC -->
+                            <classificationTypeId>SUDOC</classificationTypeId> <!-- SUDOC -->
                         </xsl:when>
                         </xsl:choose>
                     </i>
@@ -199,25 +197,25 @@
                         </name>
                         <xsl:choose>
                         <xsl:when test="@tag='100' or @tag='700'">
-                            <contributorNameTypeId>2b94c631-fca9-4892-a730-03ee529ffe2a</contributorNameTypeId> <!-- personal name -->
+                            <contributorNameTypeId>Personal name</contributorNameTypeId> <!-- personal name -->
                             <xsl:if test="@tag='100'">
                             <primary>true</primary>
                             </xsl:if>
                         </xsl:when>
                         <xsl:when test="@tag='110' or @tag='710'">
-                            <contributorNameTypeId>2e48e713-17f3-4c13-a9f8-23845bb210aa</contributorNameTypeId> <!-- corporate name -->
+                            <contributorNameTypeId>Corporate name</contributorNameTypeId> <!-- corporate name -->
                         </xsl:when>
                         <xsl:when test="@tag='111' or @tage='711'">
-                            <contributorNameTypeId>e8b311a6-3b21-43f2-a269-dd9310cb2d0a</contributorNameTypeId> <!-- meeting name -->
+                            <contributorNameTypeId>Meeting name</contributorNameTypeId> <!-- meeting name -->
                         </xsl:when>
                         <xsl:otherwise>
-                            <contributorNameTypeId>2b94c631-fca9-4892-a730-03ee529ffe2a</contributorNameTypeId> <!-- personal name -->
+                            <contributorNameTypeId>Personal name</contributorNameTypeId> <!-- personal name -->
                         </xsl:otherwise>
                         </xsl:choose>
                         <xsl:if test="marc:subfield[@code='e' or @code='4']">
-                        <contributorTypeId>
-                            <xsl:call-template name="map-relator"/>
-                        </contributorTypeId>
+                            <contributorTypeId>
+                                <xsl:value-of select="marc:subfield[@code='e' or @code='4']"/>
+                            </contributorTypeId>
                         </xsl:if>
                     </i>
                     </xsl:for-each>
@@ -321,10 +319,10 @@
                             </note>
                             <instanceNoteTypeId>
                                 <xsl:choose>
-                                    <xsl:when test='./@tag="504"'>86b6e817-e1bc-42fb-bab0-70e7547de6c1</xsl:when> <!-- biliography -->
-                                    <xsl:when test='./@tag="505"'>5ba8e385-0e27-462e-a571-ffa1fa34ea54</xsl:when> <!-- contents -->
-                                    <xsl:when test='./@tag="520"'>0e2e11b-450f-45c8-b09b-0f819999966e</xsl:when> <!-- contents -->
-                                    <xsl:otherwise>6a2533a7-4de2-4e64-8466-074c2fa9308c</xsl:otherwise> <!-- general -->
+                                    <xsl:when test='./@tag="504"'>Bibliography note</xsl:when> <!-- biliography -->
+                                    <xsl:when test='./@tag="505"'>Formatted Contents Note</xsl:when> <!-- contents -->
+                                    <xsl:when test='./@tag="520"'>Summary</xsl:when> <!-- summary -->
+                                    <xsl:otherwise>General note</xsl:otherwise> <!-- general -->
                             </xsl:choose>
                             </instanceNoteTypeId>
                         </i>

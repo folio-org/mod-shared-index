@@ -117,6 +117,9 @@ public class XmlJsonUtilTest {
       int event = xmlStreamReader.next();
       if (event == XMLStreamConstants.START_ELEMENT && "record".equals(xmlStreamReader.getLocalName())) {
         String doc = XmlJsonUtil.getSubDocument(event, xmlStreamReader);
+        if (doc == null) {
+          break;
+        }
         TransformerFactory transformerFactory = TransformerFactory.newInstance();
         Source xslt = new StreamSource("src/test/resources/MARC21slim2DC.xsl");
         Transformer transformer = transformerFactory.newTransformer(xslt);
@@ -141,6 +144,9 @@ public class XmlJsonUtilTest {
       int event = xmlStreamReader.next();
       if (event == XMLStreamConstants.START_ELEMENT && "record".equals(xmlStreamReader.getLocalName())) {
         String doc = XmlJsonUtil.getSubDocument(event, xmlStreamReader);
+        if (doc == null) {
+          break;
+        }
         TransformerFactory transformerFactory = TransformerFactory.newInstance();
         Source xslt = new StreamSource("src/test/resources/marc2inventory-instance.xsl");
         Transformer transformer = transformerFactory.newTransformer(xslt);

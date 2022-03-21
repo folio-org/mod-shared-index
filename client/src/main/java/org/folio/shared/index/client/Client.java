@@ -124,8 +124,13 @@ public class Client {
       inventory = result.getWriter().toString();
     }
     JsonObject marcPayload = XmlJsonUtil.convertMarcXmlToJson(marcXml);
-    JsonObject inventoryPayload = transformers.isEmpty()
-        ? new JsonObject() : XmlJsonUtil.convertMarcXmlToJson(marcXml);
+    JsonObject inventoryPayload;
+    if (transformers.isEmpty()) {
+      inventoryPayload = new JsonObject();
+    } else {
+      log.info("inventory: {}", inventory);
+      inventoryPayload = XmlJsonUtil.inventoryXmlToJson(inventory);
+    }
     return new JsonObject()
         .put("localId", "foo")
         .put("marcPayload", marcPayload)
@@ -142,8 +147,7 @@ public class Client {
           records.add(createIngestRecord(marcXml, transformers));
         }
       }
-    } catch (XMLStreamException | TransformerException | IOException
-        | ParserConfigurationException | SAXException e) {
+    } catch (Exception e) {
       promise.fail(e);
       return;
     }
