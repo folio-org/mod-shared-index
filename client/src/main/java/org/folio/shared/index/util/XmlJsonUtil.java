@@ -36,43 +36,36 @@ public class XmlJsonUtil {
     JsonArray fields = new JsonArray();
     DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
     documentBuilderFactory.setNamespaceAware(true);
+    documentBuilderFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
     DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
     Document document = documentBuilder.parse(new InputSource(new StringReader(marcXml)));
     Element root = document.getDocumentElement();
-    Element record = null;
-    if (root.getTagName().equals("OAI-PMH")) { // probably a static OAI-PMH file
-      Element listRecords = (Element) root.getElementsByTagName("ListRecords").item(0);
-      Element topRecord = (Element) listRecords.getElementsByTagName("record").item(0);
-      Element metadata = (Element) topRecord.getElementsByTagName("metadata").item(0);
-      record = (Element) metadata.getElementsByTagName("record").item(0);
-    } else if (root.getTagName().equals("record")) {
-      NodeList recordsEmbeddedInRecord = root.getElementsByTagName("record");
-      if (recordsEmbeddedInRecord != null && recordsEmbeddedInRecord.getLength() == 1) {
-        // e.g. a MARC record embeddded in OAI-PMH record
-        record = (Element) recordsEmbeddedInRecord.item(0);
-      } else {
-        record = root;
-      }
-    } else if (root.getLocalName().equals("collection")) {
-      NodeList records = root.getElementsByTagNameNS("*", "record");
-      if (records != null && records.getLength() == 1) {
-        record = (Element) records.item(0);
-      }
-      if (records != null && records.getLength() > 1) {
-        throw new IllegalArgumentException("convertMarcXmlToJson: can not handle multiple records");
+    Element recordElement = null;
+    if ("record".equals(root.getLocalName())) {
+      recordElement = root;
+    } else if ("collection".equals(root.getLocalName())) {
+      Node node = root.getFirstChild();
+      while (node != null) {
+        if ("record".equals(node.getLocalName())) {
+          if (recordElement != null) {
+            throw new IllegalArgumentException("can not handle multiple records");
+          }
+          recordElement = (Element) node;
+        }
+        node = node.getNextSibling();
       }
     }
-    if (record == null) {
+    if (recordElement == null) {
       throw new IllegalArgumentException("No record element found");
     }
-    Node childNode = record.getFirstChild();
-    Element childElement;
-    while (childNode != null) {
-      if (childNode.getNodeType() != record.getNodeType()) {
-        childNode = childNode.getNextSibling();
+    for (Node childNode = recordElement.getFirstChild();
+         childNode != null;
+         childNode = childNode.getNextSibling()) {
+
+      if (childNode.getNodeType() != Node.ELEMENT_NODE) {
         continue;
       }
-      childElement = (Element) childNode;
+      Element childElement = (Element) childNode;
       String textContent = childElement.getTextContent();
       if (childElement.getLocalName().equals("leader")) {
         marcJson.put("leader", textContent);
@@ -105,7 +98,6 @@ public class XmlJsonUtil {
         field.put(marcTag, fieldContent);
         fields.add(field);
       }
-      childNode = childNode.getNextSibling();
     }
     if (fields.size() > 0) {
       marcJson.put("fields", fields);

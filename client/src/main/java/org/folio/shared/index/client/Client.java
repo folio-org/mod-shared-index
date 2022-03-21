@@ -240,6 +240,7 @@ public class Client {
 
   Future<Void> sendMarcXml(InputStream stream) throws XMLStreamException {
     XMLInputFactory factory = XMLInputFactory.newInstance();
+    factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
     XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
     return Future.<Void>future(p -> sendMarcXmlChunk(xmlStreamReader, p))
         .eventually(x -> {
