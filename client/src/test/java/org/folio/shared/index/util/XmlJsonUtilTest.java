@@ -96,6 +96,16 @@ public class XmlJsonUtilTest {
     Assert.assertNull(XmlJsonUtil.getSubDocument(event, xmlStreamReader));
   }
 
+  @Test
+  public void testGetSubDocumentDocType() throws XMLStreamException {
+    String sub = "<tag>x</tag>";
+    String collection = "<!DOCTYPE tag []>" + sub;
+    InputStream stream = new ByteArrayInputStream(collection.getBytes());
+    XMLInputFactory factory = XMLInputFactory.newInstance();
+    XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
+    int event = xmlStreamReader.next();
+    Assert.assertEquals(sub, XmlJsonUtil.getSubDocument(event, xmlStreamReader));
+  }
 
   @Test
   public void testMarc2DC() throws FileNotFoundException, XMLStreamException, TransformerException {
