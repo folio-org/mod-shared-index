@@ -143,10 +143,11 @@ public class XmlJsonUtil {
    * @return XML document string; null if no more documents in stream
    * @throws XMLStreamException if there's an exception for the XML stream
    */
-  public static String getSubDocument(int event, XMLStreamReader reader) throws XMLStreamException {
+  public static String getSubDocument(int event, XMLStreamReader reader)
+      throws XMLStreamException {
     int level = 0;
     Buffer buffer = Buffer.buffer();
-    for (;;) {
+    for (; reader.hasNext(); event = reader.next()) {
       switch (event) {
         case XMLStreamConstants.START_ELEMENT:
           level++;
@@ -182,7 +183,7 @@ public class XmlJsonUtil {
           break;
         default:
       }
-      event = reader.next();
     }
+    return null;
   }
 }

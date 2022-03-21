@@ -59,7 +59,7 @@ public class XmlJsonUtilTest {
   }
 
   @Test
-  public void testGetSubDocument() throws XMLStreamException {
+  public void testGetSubDocumentCollection() throws XMLStreamException {
     String collection = "<collection>\n"
         + MARCXML1_SAMPLE
         + "To be <ignored/>"
@@ -80,6 +80,22 @@ public class XmlJsonUtilTest {
     Assert.assertEquals(MARCXML1_SAMPLE, docs.get(0));
     Assert.assertEquals(MARCXML2_SAMPLE, docs.get(1));
   }
+
+  @Test
+  public void testGetSubDocumentNoSub() throws XMLStreamException {
+    String collection = "<tag>x</tag>";
+    InputStream stream = new ByteArrayInputStream(collection.getBytes());
+    XMLInputFactory factory = XMLInputFactory.newInstance();
+    XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
+
+    int event;
+    Assert.assertTrue(xmlStreamReader.hasNext());
+    xmlStreamReader.next();
+    Assert.assertTrue(xmlStreamReader.hasNext());
+    event = xmlStreamReader.next();
+    Assert.assertNull(XmlJsonUtil.getSubDocument(event, xmlStreamReader));
+  }
+
 
   @Test
   public void testMarc2DC() throws FileNotFoundException, XMLStreamException, TransformerException {
