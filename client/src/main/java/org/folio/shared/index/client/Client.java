@@ -114,7 +114,8 @@ public class Client {
   }
 
   private static JsonObject createIngestRecord(String marcXml, List<Transformer> transformers)
-      throws TransformerException, ParserConfigurationException, IOException, SAXException {
+      throws TransformerException, ParserConfigurationException,
+      IOException, SAXException, XMLStreamException {
 
     String inventory = marcXml;
     for (Transformer transformer : transformers) {
@@ -128,8 +129,8 @@ public class Client {
     if (transformers.isEmpty()) {
       inventoryPayload = new JsonObject();
     } else {
-      log.info("inventory: {}", inventory);
       inventoryPayload = XmlJsonUtil.inventoryXmlToJson(inventory);
+      log.info("inventoryPayload {}", inventoryPayload.encodePrettily());
     }
     return new JsonObject()
         .put("localId", "foo")

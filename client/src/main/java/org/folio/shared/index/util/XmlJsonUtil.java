@@ -1,13 +1,17 @@
 package org.folio.shared.index.util;
 
+import io.swagger.v3.oas.models.media.XML;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.StringReader;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
@@ -105,25 +109,79 @@ public class XmlJsonUtil {
     return marcJson;
   }
 
+  static Object xmlToJson(XMLStreamReader xmlStreamReader, String skip, int event,
+                          boolean arrayNode) throws XMLStreamException {
+
+    StringBuilder text = null;
+    JsonObject o = null;
+    while (xmlStreamReader.hasNext()) {
+      if (event == XMLStreamConstants.START_ELEMENT) {
+        String localName = xmlStreamReader.getLocalName();
+        if ("arr".equals(localName)) {
+          JsonArray ar = new JsonArray();
+          while (xmlStreamReader.hasNext()) {
+            event = xmlStreamReader.next();
+            if (event == XMLStreamConstants.END_ELEMENT) {
+              break;
+            }
+            Object x = xmlToJson(xmlStreamReader, skip, event, true);
+            if (x != null) {
+              ar.add(x);
+            }
+          }
+          return ar;
+        } else if (skip.equals(localName)) {
+          int level = 0;
+          while (xmlStreamReader.hasNext()) {
+            if (event == XMLStreamConstants.END_ELEMENT) {
+              level--;
+              if (level == 0) {
+                break;
+              }
+            } else if (event == XMLStreamConstants.START_ELEMENT) {
+              level++;
+            }
+            event = xmlStreamReader.next();
+          }
+        } else {
+          event = xmlStreamReader.next();
+          if (o == null) {
+            o = new JsonObject();
+          }
+          o.put(localName, xmlToJson(xmlStreamReader, skip, event, false));
+          if (arrayNode) {
+            return o;
+          }
+        }
+      } else if (!arrayNode && event == XMLStreamConstants.CHARACTERS) {
+        if (text == null) {
+          text = new StringBuilder();
+        }
+        text.append(xmlStreamReader.getText());
+      } else {
+        break;
+      }
+      event = xmlStreamReader.next();
+    }
+    return o != null ? o : text;
+  }
+
   /**
    * Convert "inventory" XML to JSON.
    * @param xml inventory XML
    * @return json object without original record
-   * @throws ParserConfigurationException parser configuration exception
-   * @throws IOException i/o exception
-   * @throws SAXException sax parser exception
+   * @throws XMLStreamException bad XML
    */
-  public static JsonObject inventoryXmlToJson(String xml)
-      throws ParserConfigurationException, IOException, SAXException {
-
-    DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
-    documentBuilderFactory.setNamespaceAware(true);
-    documentBuilderFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-
-    DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
-    Document document = documentBuilder.parse(new InputSource(new StringReader(xml)));
-    Element root = document.getDocumentElement();
-    return new JsonObject();
+  public static JsonObject inventoryXmlToJson(String xml) throws XMLStreamException {
+    InputStream stream = new ByteArrayInputStream(xml.getBytes());
+    XMLInputFactory factory = XMLInputFactory.newInstance();
+    factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+    XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
+    Object o = xmlToJson(xmlStreamReader, "original", xmlStreamReader.next(), false);
+    if (o instanceof JsonObject) {
+      return (JsonObject) o;
+    }
+    throw new IllegalArgumentException("inventoryToXml failed");
   }
 
   private static String encodeXmlText(String s) {

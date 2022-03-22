@@ -222,4 +222,64 @@ public class XmlJsonUtilTest {
     Assert.assertEquals("No record element found", t.getMessage());
   }
 
+  @Test
+  public void inventoryXmlToJson() throws XMLStreamException {
+    Assert.assertThrows(javax.xml.stream.XMLStreamException.class,
+        () -> XmlJsonUtil.inventoryXmlToJson("hello"));
+
+    Assert.assertEquals(new JsonObject().put("a", null), XmlJsonUtil.inventoryXmlToJson("<a/>"));
+
+    Assert.assertEquals(new JsonObject().put("a", "s"),
+        XmlJsonUtil.inventoryXmlToJson("<a>s</a>"));
+
+    Assert.assertEquals(new JsonObject().put("a", new JsonObject().put("b","s")),
+        XmlJsonUtil.inventoryXmlToJson("<a><b>s</b></a>"));
+
+    Assert.assertEquals(new JsonObject().put("a", new JsonObject().put("b","s")),
+        XmlJsonUtil.inventoryXmlToJson("<a> <b>s</b> </a>"));
+
+    Assert.assertEquals(new JsonObject().put("a", new JsonObject().put("b", null).put("c", null)),
+        XmlJsonUtil.inventoryXmlToJson("<a><b/> <c/> </a>"));
+
+    Assert.assertEquals(new JsonObject().put("a", new JsonArray()),
+        XmlJsonUtil.inventoryXmlToJson("<a><arr/></a>"));
+
+    Assert.assertEquals(new JsonObject().put("a", new JsonArray().add(new JsonObject().put("t","1"))),
+        XmlJsonUtil.inventoryXmlToJson("<a><arr><t>1</t></arr></a>"));
+
+    Assert.assertEquals(new JsonObject().put("a", new JsonArray()
+            .add(new JsonObject().put("t","1"))
+            .add(new JsonObject().put("u","2"))
+            .add(new JsonObject().put("v","3"))),
+        XmlJsonUtil.inventoryXmlToJson("<a><arr><t>1</t><u>2</u><v>3</v></arr></a>"));
+
+    Assert.assertEquals(new JsonObject().put("a", new JsonArray()
+            .add(new JsonObject().put("t","1"))
+            .add(new JsonObject().put("t","2"))
+            .add(new JsonObject().put("t","3"))),
+        XmlJsonUtil.inventoryXmlToJson("<a><arr><t>1</t><t>2</t><t>3</t></arr></a>"));
+
+    Assert.assertEquals(new JsonObject().put("a", new JsonArray()
+            .add(new JsonArray()
+                .add(new JsonObject().put("b", "1"))
+                .add(new JsonObject().put("c", "2")))),
+        XmlJsonUtil.inventoryXmlToJson("<a><arr><arr><b>1</b><c>2</c></arr></arr></a>"));
+
+    Throwable t = Assert.assertThrows(IllegalArgumentException.class,
+        () -> XmlJsonUtil.inventoryXmlToJson("<arr/>"));
+    Assert.assertEquals("inventoryToXml failed", t.getMessage());
+
+    Assert.assertEquals(new JsonObject().put("a", new JsonObject().put("b", null)),
+        XmlJsonUtil.inventoryXmlToJson("<a><original><a><b><c></c>1</b></a></original><b/></a>"));
+
+    Assert.assertEquals(new JsonObject().put("a", new JsonArray()
+            .add(new JsonObject().put("i", null))),
+        XmlJsonUtil.inventoryXmlToJson("<a><arr><i/> </arr> </a>"));
+
+    Assert.assertEquals(new JsonObject().put("a", new JsonArray()
+            .add(new JsonObject().put("b", null))
+            .add(new JsonObject().put("c", null))
+        ),
+        XmlJsonUtil.inventoryXmlToJson("<a><arr><b/><original>x</original><c/></arr></a>"));
+  }
 }
