@@ -146,7 +146,8 @@ public class Storage {
             .put("globalId", row.getUUID("id"))
             .put("localId", row.getString("local_id"))
             .put("sourceId", row.getUUID("source_id"))
-            .put("payload", row.getJsonObject("marc_payload")));
+            .put("inventoryPayload", row.getJsonObject("inventory_payload"))
+            .put("marcPayload", row.getJsonObject("marc_payload")));
   }
 
   /**

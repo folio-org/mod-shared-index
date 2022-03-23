@@ -364,7 +364,8 @@ public class MainVerticleTest {
           .then().statusCode(200)
           .body("items", hasSize(1))
           .body("items[0].localId", is(sharedRecord.getString("localId")))
-          .body("items[0].payload.leader", is(sharedRecord.getJsonObject("marcPayload").getString("leader")))
+          .body("items[0].marcPayload.leader", is(sharedRecord.getJsonObject("marcPayload").getString("leader")))
+          .body("items[0].inventoryPayload.isbn", is(sharedRecord.getJsonObject("inventoryPayload").getString("isbn")))
           .body("items[0].sourceId", is(sourceId))
           .body("resultInfo.totalRecords", is(1));
     }

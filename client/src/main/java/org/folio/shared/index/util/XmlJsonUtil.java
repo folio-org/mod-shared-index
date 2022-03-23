@@ -1,6 +1,5 @@
 package org.folio.shared.index.util;
 
-import io.swagger.v3.oas.models.media.XML;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -8,6 +7,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
+import java.io.StringWriter;
+import java.util.List;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -15,6 +16,11 @@ import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
+import javax.xml.transform.Source;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -264,5 +270,53 @@ public class XmlJsonUtil {
       }
     }
     return null;
+  }
+
+  static JsonObject createIngestRecord(JsonObject marcPayload, JsonObject stylesheetResult) {
+    if (stylesheetResult.containsKey("collection")) {
+      stylesheetResult = stylesheetResult.getJsonObject("collection");
+    }
+    JsonObject inventoryPayload = stylesheetResult.getJsonObject("record");
+    if (inventoryPayload == null) {
+      throw new IllegalArgumentException("inventory xml: missing record property");
+    }
+    String localId = inventoryPayload.getString("localIdentifier");
+    if (localId == null) {
+      throw new IllegalArgumentException("inventory xml: missing record/localIdentifier string");
+    }
+    JsonObject instance = inventoryPayload.getJsonObject("instance");
+    if (instance == null) {
+      throw new IllegalArgumentException("inventory xml: missing record/instance object");
+    }
+    return new JsonObject()
+        .put("localId", localId)
+        .put("marcPayload", marcPayload)
+        .put("inventoryPayload", instance);
+  }
+
+  /**
+   * Create ingest object with "localId", "marcPayload", "inventoryPayload".
+   * @param marcXml MARC XML string
+   * @param transformers List of XSLT transforms to apply
+   * @return ingest JSON object
+   * @throws TransformerException transformer problem
+   * @throws ParserConfigurationException parser problem
+   * @throws IOException input/io problem
+   * @throws SAXException sax problem (Invalid XML)
+   * @throws XMLStreamException xml stream problem (Invalid XML)
+   */
+  public static JsonObject createIngestRecord(String marcXml, List<Transformer> transformers)
+      throws TransformerException, ParserConfigurationException,
+      IOException, SAXException, XMLStreamException {
+
+    String inventory = marcXml;
+    for (Transformer transformer : transformers) {
+      Source source = new StreamSource(new StringReader(inventory));
+      StreamResult result = new StreamResult(new StringWriter());
+      transformer.transform(source, result);
+      inventory = result.getWriter().toString();
+    }
+    return createIngestRecord(XmlJsonUtil.convertMarcXmlToJson(marcXml),
+        XmlJsonUtil.inventoryXmlToJson(inventory));
   }
 }

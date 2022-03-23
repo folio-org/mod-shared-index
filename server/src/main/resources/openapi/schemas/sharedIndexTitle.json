@@ -20,9 +20,13 @@
       "type": "object",
       "description" : "match keys for this record"
     },
-    "payload": {
+    "marcPayload": {
       "type": "object",
-      "description" : "combined marc, inventory"
+      "description" : "MARC payload in JSON"
+    },
+    "inventoryPayload": {
+      "type": "object",
+      "description" : "inventory payload"
     }
   },
   "additionalProperties": false,

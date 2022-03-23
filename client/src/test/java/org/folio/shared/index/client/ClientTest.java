@@ -127,7 +127,7 @@ public class ClientTest {
   }
 
   @Test
-  public void sendFile(TestContext context) {
+  public void sendMarcRecFile(TestContext context) {
     HttpServerOptions so = new HttpServerOptions()
         .setHandle100ContinueAutomatically(true);
 
@@ -153,6 +153,7 @@ public class ClientTest {
             "--chunk", "2",
             "--tenant", "testlib",
             "--source", sourceId.toString(),
+            "--xsl", "src/test/resources/marc2inventory-instance.xsl",
             "src/test/resources/marc3.marc"};
     future = future.compose(x -> Client.exec(webClient, args));
 
@@ -164,64 +165,18 @@ public class ClientTest {
           JsonObject r = requests.getJsonObject(0);
           context.assertEquals(sourceId.toString(), r.getString("sourceId"));
           context.assertEquals(2, r.getJsonArray("records").size());
+          context.assertEquals("   73209622 //r823", r.getJsonArray("records").getJsonObject(0).getString("localId"));
+          context.assertEquals("   11224466 ", r.getJsonArray("records").getJsonObject(1).getString("localId"));
           // second with 1 record
           r = requests.getJsonObject(1);
           context.assertEquals(sourceId.toString(), r.getString("sourceId"));
           context.assertEquals(1, r.getJsonArray("records").size());
+          context.assertEquals("   77123332 ", r.getJsonArray("records").getJsonObject(0).getString("localId"));
         }));
   }
 
   @Test
-  public void sendMarcXmlRecordsNoXslt(TestContext context) {
-    HttpServerOptions so = new HttpServerOptions()
-        .setHandle100ContinueAutomatically(true);
-
-    JsonArray requests = new JsonArray();
-
-    HttpServer httpServer = vertx.createHttpServer(so);
-    Router router = Router.router(vertx);
-    router.put("/shared-index/records")
-        .handler(BodyHandler.create())
-        .handler(c -> {
-          requests.add(c.getBodyAsJson());
-          c.response().setStatusCode(200);
-          c.response().putHeader("Content-Type", "application/json");
-          c.response().end("{}");
-        });
-
-    httpServer.requestHandler(router);
-    Future<Void> future = httpServer.listen(PORT).mapEmpty();
-
-    UUID sourceId = UUID.randomUUID();
-    String [] args =
-        { "--okapiurl", "http://localhost:" + PORT,
-            "--chunk", "4",
-            "--tenant", "testlib",
-            "--source", sourceId.toString(),
-            "src/test/resources/record10.xml"};
-    future = future.compose(x -> Client.exec(webClient, args));
-
-    future.eventually(x -> httpServer.close())
-        .onComplete(context.asyncAssertSuccess(res -> {
-          context.assertEquals(3, requests.size());
-
-          // first chunk with 4 records
-          JsonObject r = requests.getJsonObject(0);
-          context.assertEquals(sourceId.toString(), r.getString("sourceId"));
-          context.assertEquals(4, r.getJsonArray("records").size());
-          // 2nd chunk with 4 records
-          r = requests.getJsonObject(1);
-          context.assertEquals(sourceId.toString(), r.getString("sourceId"));
-          context.assertEquals(4, r.getJsonArray("records").size());
-          // last chunk with 2 records
-          r = requests.getJsonObject(2);
-          context.assertEquals(sourceId.toString(), r.getString("sourceId"));
-          context.assertEquals(2, r.getJsonArray("records").size());
-        }));
-  }
-
-  @Test
-  public void sendMarcXmlRecordsWithXslt(TestContext context) {
+  public void sendMarcXmlRecords(TestContext context) {
     HttpServerOptions so = new HttpServerOptions()
         .setHandle100ContinueAutomatically(true);
 

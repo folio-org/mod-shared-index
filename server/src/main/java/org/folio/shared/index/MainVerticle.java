@@ -24,6 +24,7 @@ public class MainVerticle extends AbstractVerticle {
 
     final int port = Integer.parseInt(
         Config.getSysConf("http.port", "port", "8081", config()));
+    log.info("Listening on port {}", port);
 
     SharedIndexService sharedIndexService = new SharedIndexService(vertx);
 

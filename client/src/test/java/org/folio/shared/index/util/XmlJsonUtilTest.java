@@ -4,6 +4,7 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import java.io.*;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.stream.XMLInputFactory;
@@ -282,4 +283,62 @@ public class XmlJsonUtilTest {
         ),
         XmlJsonUtil.inventoryXmlToJson("<a><arr><b/><original>x</original><c/></arr></a>"));
   }
+  @Test
+  public void testCreateIngestRecord1() {
+    Throwable t = Assert.assertThrows(IllegalArgumentException.class,
+        () -> XmlJsonUtil.createIngestRecord(new JsonObject(), new JsonObject()));
+    Assert.assertEquals("inventory xml: missing record property", t.getMessage());
+
+    t = Assert.assertThrows(IllegalArgumentException.class,
+        () -> XmlJsonUtil.createIngestRecord(new JsonObject(), new JsonObject().put("record", new JsonObject())));
+    Assert.assertEquals("inventory xml: missing record/localIdentifier string", t.getMessage());
+
+    t = Assert.assertThrows(IllegalArgumentException.class,
+        () -> XmlJsonUtil.createIngestRecord(new JsonObject(), new JsonObject().put("record", new JsonObject().put("localIdentifier", "123"))));
+    Assert.assertEquals("inventory xml: missing record/instance object", t.getMessage());
+
+    JsonObject ingest = XmlJsonUtil.createIngestRecord(new JsonObject(), new JsonObject()
+        .put("record", new JsonObject()
+            .put("localIdentifier", "123")
+            .put("instance", new JsonObject().put("a", "b"))));
+    Assert.assertEquals("123", ingest.getString("localId"));
+    Assert.assertEquals(new JsonObject().put("a", "b"), ingest.getJsonObject("inventoryPayload"));
+
+    ingest = XmlJsonUtil.createIngestRecord(new JsonObject(), new JsonObject()
+        .put("collection", new JsonObject()
+            .put("record", new JsonObject()
+                .put("localIdentifier", "123")
+                .put("instance", new JsonObject().put("a", "b")))));
+    Assert.assertEquals("123", ingest.getString("localId"));
+    Assert.assertEquals(new JsonObject().put("a", "b"), ingest.getJsonObject("inventoryPayload"));
+  }
+
+  @Test
+  public void testCreateIngestRecord10() throws IOException, XMLStreamException,
+      TransformerException, ParserConfigurationException, SAXException {
+    TransformerFactory transformerFactory = TransformerFactory.newInstance();
+    Source xslt = new StreamSource("src/test/resources/marc2inventory-instance.xsl");
+    List<Transformer> transformers = List.of(transformerFactory.newTransformer(xslt));
+
+    InputStream stream = new FileInputStream("src/test/resources/record10.xml");
+    XMLInputFactory factory = XMLInputFactory.newInstance();
+    XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
+    JsonArray ingestRecords = new JsonArray();
+
+    while (xmlStreamReader.hasNext()) {
+      int event = xmlStreamReader.next();
+      if (event == XMLStreamConstants.START_ELEMENT && "record".equals(xmlStreamReader.getLocalName())) {
+        String doc = XmlJsonUtil.getSubDocument(event, xmlStreamReader);
+        if (doc == null) {
+          break;
+        }
+        ingestRecords.add(XmlJsonUtil.createIngestRecord(doc, transformers));
+      }
+    }
+    Assert.assertEquals("a1", ingestRecords.getJsonObject(0).getString("localId"));
+    Assert.assertEquals("a2", ingestRecords.getJsonObject(1).getString("localId"));
+    Assert.assertEquals("a10", ingestRecords.getJsonObject(9).getString("localId"));
+    Assert.assertEquals(10, ingestRecords.size());
+  }
+
 }

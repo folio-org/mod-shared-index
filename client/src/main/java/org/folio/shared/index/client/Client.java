@@ -10,14 +10,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StringReader;
-import java.io.StringWriter;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
@@ -25,18 +22,15 @@ import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.Source;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerConfigurationException;
-import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.folio.okapi.common.XOkapiHeaders;
 import org.folio.shared.index.util.XmlJsonUtil;
-import org.marc4j.MarcJsonWriter;
 import org.marc4j.MarcStreamReader;
+import org.marc4j.MarcXmlWriter;
 import org.marc4j.converter.impl.AnselToUnicode;
-import org.xml.sax.SAXException;
 
 public class Client {
   static final Logger log = LogManager.getLogger(Client.class);
@@ -73,26 +67,32 @@ public class Client {
 
   private void sendIso2709Chunk(MarcStreamReader reader, Promise<Void> promise) {
     JsonArray records = new JsonArray();
-    while (reader.hasNext() && records.size() < chunkSize) {
-      org.marc4j.marc.Record marcRecord = reader.next();
-      char charCodingScheme = marcRecord.getLeader().getCharCodingScheme();
-      if (charCodingScheme == ' ') {
-        marcRecord.getLeader().setCharCodingScheme('a');
+    try {
+      while (reader.hasNext() && records.size() < chunkSize) {
+        org.marc4j.marc.Record marcRecord = reader.next();
+        char charCodingScheme = marcRecord.getLeader().getCharCodingScheme();
+        if (charCodingScheme == ' ') {
+          marcRecord.getLeader().setCharCodingScheme('a');
+        }
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        MarcXmlWriter writer = new MarcXmlWriter(out);
+        if (charCodingScheme == ' ') {
+          writer.setConverter(new AnselToUnicode());
+        }
+        writer.write(marcRecord);
+        writer.close();
+        records.add(XmlJsonUtil.createIngestRecord(out.toString(), transformers));
+        ++localSequence;
+        if ((localSequence % 1000) == 0) {
+          log.info("{}", localSequence);
+        }
       }
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      MarcJsonWriter writer = new MarcJsonWriter(out, MarcJsonWriter.MARC_IN_JSON);
-      if (charCodingScheme == ' ') {
-        writer.setConverter(new AnselToUnicode());
-      }
-      writer.write(marcRecord);
-      JsonObject marcPayload = new JsonObject(out.toString());
-      JsonObject inventoryPayload = new JsonObject();
-      records.add(new JsonObject()
-          .put("localId", Integer.toString(localSequence++))
-          .put("marcPayload", marcPayload)
-          .put("inventoryPayload", inventoryPayload));
+    } catch (Exception e) {
+      promise.fail(e);
+      return;
     }
     if (records.isEmpty()) {
+      log.info("{}", localSequence);
       promise.complete();
       return;
     }
@@ -100,9 +100,6 @@ public class Client {
         .put("sourceId", sourceId)
         .put("records", records);
 
-    if ((localSequence % 1000) == 0) {
-      log.info("{}", localSequence);
-    }
     webClient.putAbs(okapiUrl + "/shared-index/records")
         .putHeader(XOkapiHeaders.TENANT, tenant)
         .putHeader(XOkapiHeaders.URL, okapiUrl)
@@ -113,31 +110,6 @@ public class Client {
         .onSuccess(x -> sendIso2709Chunk(reader, promise));
   }
 
-  private static JsonObject createIngestRecord(String marcXml, List<Transformer> transformers)
-      throws TransformerException, ParserConfigurationException,
-      IOException, SAXException, XMLStreamException {
-
-    String inventory = marcXml;
-    for (Transformer transformer : transformers) {
-      Source source = new StreamSource(new StringReader(inventory));
-      StreamResult result = new StreamResult(new StringWriter());
-      transformer.transform(source, result);
-      inventory = result.getWriter().toString();
-    }
-    JsonObject marcPayload = XmlJsonUtil.convertMarcXmlToJson(marcXml);
-    JsonObject inventoryPayload;
-    if (transformers.isEmpty()) {
-      inventoryPayload = new JsonObject();
-    } else {
-      inventoryPayload = XmlJsonUtil.inventoryXmlToJson(inventory);
-      log.info("inventoryPayload {}", inventoryPayload.encodePrettily());
-    }
-    return new JsonObject()
-        .put("localId", "foo")
-        .put("marcPayload", marcPayload)
-        .put("inventoryPayload", inventoryPayload);
-  }
-
   private void sendMarcXmlChunk(XMLStreamReader stream, Promise<Void> promise)  {
     JsonArray records = new JsonArray();
     try {
@@ -145,7 +117,11 @@ public class Client {
         int event = stream.next();
         if (event == XMLStreamConstants.START_ELEMENT && "record".equals(stream.getLocalName())) {
           String marcXml = XmlJsonUtil.getSubDocument(event, stream);
-          records.add(createIngestRecord(marcXml, transformers));
+          records.add(XmlJsonUtil.createIngestRecord(marcXml, transformers));
+          ++localSequence;
+          if ((localSequence % 1000) == 0) {
+            log.info("{}", localSequence);
+          }
         }
       }
     } catch (Exception e) {
