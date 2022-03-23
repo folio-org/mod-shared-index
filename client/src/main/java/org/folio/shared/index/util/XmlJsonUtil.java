@@ -29,6 +29,9 @@ import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 public class XmlJsonUtil {
+  private static final String MARC_COLLECTION = "collection";
+  private static final String MARC_RECORD = "record";
+
   private XmlJsonUtil() { }
 
   /**
@@ -51,12 +54,12 @@ public class XmlJsonUtil {
     Document document = documentBuilder.parse(new InputSource(new StringReader(marcXml)));
     Element root = document.getDocumentElement();
     Element recordElement = null;
-    if ("record".equals(root.getLocalName())) {
+    if (MARC_RECORD.equals(root.getLocalName())) {
       recordElement = root;
-    } else if ("collection".equals(root.getLocalName())) {
+    } else if (MARC_COLLECTION.equals(root.getLocalName())) {
       Node node = root.getFirstChild();
       while (node != null) {
-        if ("record".equals(node.getLocalName())) {
+        if (MARC_RECORD.equals(node.getLocalName())) {
           if (recordElement != null) {
             throw new IllegalArgumentException("can not handle multiple records");
           }
@@ -273,10 +276,10 @@ public class XmlJsonUtil {
   }
 
   static JsonObject createIngestRecord(JsonObject marcPayload, JsonObject stylesheetResult) {
-    if (stylesheetResult.containsKey("collection")) {
-      stylesheetResult = stylesheetResult.getJsonObject("collection");
+    if (stylesheetResult.containsKey(MARC_COLLECTION)) {
+      stylesheetResult = stylesheetResult.getJsonObject(MARC_COLLECTION);
     }
-    JsonObject inventoryPayload = stylesheetResult.getJsonObject("record");
+    JsonObject inventoryPayload = stylesheetResult.getJsonObject(MARC_RECORD);
     if (inventoryPayload == null) {
       throw new IllegalArgumentException("inventory xml: missing record property");
     }

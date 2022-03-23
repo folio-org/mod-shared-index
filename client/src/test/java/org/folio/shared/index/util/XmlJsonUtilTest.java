@@ -285,30 +285,43 @@ public class XmlJsonUtilTest {
   }
   @Test
   public void testCreateIngestRecord1() {
-    Throwable t = Assert.assertThrows(IllegalArgumentException.class,
-        () -> XmlJsonUtil.createIngestRecord(new JsonObject(), new JsonObject()));
-    Assert.assertEquals("inventory xml: missing record property", t.getMessage());
+    JsonObject marcPayload = new JsonObject()
+        .put("record", new JsonObject().put("leader", "l"));
+    {
+      JsonObject inventoryPayload = new JsonObject();
+      Throwable t = Assert.assertThrows(IllegalArgumentException.class,
+          () -> XmlJsonUtil.createIngestRecord(marcPayload, inventoryPayload));
+      Assert.assertEquals("inventory xml: missing record property", t.getMessage());
+    }
 
-    t = Assert.assertThrows(IllegalArgumentException.class,
-        () -> XmlJsonUtil.createIngestRecord(new JsonObject(), new JsonObject().put("record", new JsonObject())));
-    Assert.assertEquals("inventory xml: missing record/localIdentifier string", t.getMessage());
+    {
+      JsonObject inventoryPayload = new JsonObject().put("record", new JsonObject());
+      Throwable t = Assert.assertThrows(IllegalArgumentException.class,
+          () -> XmlJsonUtil.createIngestRecord(marcPayload, inventoryPayload));
+      Assert.assertEquals("inventory xml: missing record/localIdentifier string", t.getMessage());
+    }
 
-    t = Assert.assertThrows(IllegalArgumentException.class,
-        () -> XmlJsonUtil.createIngestRecord(new JsonObject(), new JsonObject().put("record", new JsonObject().put("localIdentifier", "123"))));
-    Assert.assertEquals("inventory xml: missing record/instance object", t.getMessage());
+    {
+      JsonObject inventoryPayload = new JsonObject().put("record", new JsonObject().put("localIdentifier", "123"));
+      Throwable t = Assert.assertThrows(IllegalArgumentException.class,
+          () -> XmlJsonUtil.createIngestRecord(new JsonObject(), inventoryPayload));
+      Assert.assertEquals("inventory xml: missing record/instance object", t.getMessage());
+    }
 
-    JsonObject ingest = XmlJsonUtil.createIngestRecord(new JsonObject(), new JsonObject()
+    JsonObject ingest = XmlJsonUtil.createIngestRecord(marcPayload, new JsonObject()
         .put("record", new JsonObject()
             .put("localIdentifier", "123")
             .put("instance", new JsonObject().put("a", "b"))));
+    Assert.assertEquals(marcPayload, ingest.getJsonObject("marcPayload"));
     Assert.assertEquals("123", ingest.getString("localId"));
     Assert.assertEquals(new JsonObject().put("a", "b"), ingest.getJsonObject("inventoryPayload"));
 
-    ingest = XmlJsonUtil.createIngestRecord(new JsonObject(), new JsonObject()
+    ingest = XmlJsonUtil.createIngestRecord(marcPayload, new JsonObject()
         .put("collection", new JsonObject()
             .put("record", new JsonObject()
                 .put("localIdentifier", "123")
                 .put("instance", new JsonObject().put("a", "b")))));
+    Assert.assertEquals(marcPayload, ingest.getJsonObject("marcPayload"));
     Assert.assertEquals("123", ingest.getString("localId"));
     Assert.assertEquals(new JsonObject().put("a", "b"), ingest.getJsonObject("inventoryPayload"));
   }
