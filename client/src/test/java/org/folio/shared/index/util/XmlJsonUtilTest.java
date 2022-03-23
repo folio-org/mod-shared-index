@@ -304,7 +304,7 @@ public class XmlJsonUtilTest {
     {
       JsonObject inventoryPayload = new JsonObject().put("record", new JsonObject().put("localIdentifier", "123"));
       Throwable t = Assert.assertThrows(IllegalArgumentException.class,
-          () -> XmlJsonUtil.createIngestRecord(new JsonObject(), inventoryPayload));
+          () -> XmlJsonUtil.createIngestRecord(marcPayload, inventoryPayload));
       Assert.assertEquals("inventory xml: missing record/instance object", t.getMessage());
     }
 
