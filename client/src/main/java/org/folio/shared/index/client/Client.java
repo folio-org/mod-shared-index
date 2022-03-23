@@ -65,6 +65,13 @@ public class Client {
     this.okapiUrl = okapiUrl;
   }
 
+  private void incrementSequence() {
+    ++localSequence;
+    if ((localSequence % 1000) == 0) {
+      log.info("{}", localSequence);
+    }
+  }
+
   private void sendIso2709Chunk(MarcStreamReader reader, Promise<Void> promise) {
     JsonArray records = new JsonArray();
     try {
@@ -82,10 +89,7 @@ public class Client {
         writer.write(marcRecord);
         writer.close();
         records.add(XmlJsonUtil.createIngestRecord(out.toString(), transformers));
-        ++localSequence;
-        if ((localSequence % 1000) == 0) {
-          log.info("{}", localSequence);
-        }
+        incrementSequence();
       }
     } catch (Exception e) {
       promise.fail(e);
@@ -118,10 +122,7 @@ public class Client {
         if (event == XMLStreamConstants.START_ELEMENT && "record".equals(stream.getLocalName())) {
           String marcXml = XmlJsonUtil.getSubDocument(event, stream);
           records.add(XmlJsonUtil.createIngestRecord(marcXml, transformers));
-          ++localSequence;
-          if ((localSequence % 1000) == 0) {
-            log.info("{}", localSequence);
-          }
+          incrementSequence();
         }
       }
     } catch (Exception e) {
@@ -137,9 +138,6 @@ public class Client {
         .put("sourceId", sourceId)
         .put("records", records);
 
-    if ((localSequence % 1000) == 0) {
-      log.info("{}", localSequence);
-    }
     webClient.putAbs(okapiUrl + "/shared-index/records")
         .putHeader(XOkapiHeaders.TENANT, tenant)
         .putHeader(XOkapiHeaders.URL, okapiUrl)
