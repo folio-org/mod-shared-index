@@ -203,9 +203,6 @@ public class XmlJsonUtil {
       } else {
         break;
       }
-      if (!xmlStreamReader.hasNext()) {
-        break;
-      }
       event = next(xmlStreamReader);
     }
     if (ar != null) {
