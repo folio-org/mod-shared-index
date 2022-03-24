@@ -144,13 +144,11 @@ public class XmlJsonUtil {
   static JsonArray xmlToJsonArray(int depth, XMLStreamReader xmlStreamReader, String skip)
       throws XMLStreamException {
     JsonArray ar = new JsonArray();
-    while (xmlStreamReader.hasNext()) {
+    while (true) {
       int event = next(xmlStreamReader);
       if (event == XMLStreamConstants.START_ELEMENT) {
         Object o = xmlToJsonObject(depth + 1, xmlStreamReader, skip, event, true);
-        if (o instanceof JsonObject || o instanceof JsonArray) {
-          ar.add(o);
-        }
+        ar.add(o);
       } else if (event != XMLStreamConstants.CHARACTERS) {
         break;
       }
@@ -160,7 +158,7 @@ public class XmlJsonUtil {
 
   static void xmlToJsonSkip(XMLStreamReader xmlStreamReader, int event) throws XMLStreamException {
     int level = 0;
-    while (xmlStreamReader.hasNext()) {
+    while (true) {
       if (event == XMLStreamConstants.END_ELEMENT) {
         level--;
         if (level == 0) {
@@ -226,10 +224,7 @@ public class XmlJsonUtil {
     factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
     XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
     Object o = xmlToJsonObject(0, xmlStreamReader, "original", next(xmlStreamReader), false);
-    if (o instanceof JsonObject) {
-      return (JsonObject) o;
-    }
-    throw new IllegalArgumentException("inventoryToXml failed");
+    return (JsonObject) o;
   }
 
   private static String encodeXmlText(String s) {
