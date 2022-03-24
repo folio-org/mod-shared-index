@@ -21,6 +21,8 @@ import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -29,6 +31,8 @@ import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 public class XmlJsonUtil {
+  private static final Logger LOGGER = LogManager.getLogger(XmlJsonUtil.class);
+
   private static final String MARC_COLLECTION = "collection";
   private static final String MARC_RECORD = "record";
 
@@ -118,27 +122,52 @@ public class XmlJsonUtil {
     return marcJson;
   }
 
-  static Object xmlToJson(XMLStreamReader xmlStreamReader, String skip, int event,
-                          boolean arrayNode) throws XMLStreamException {
+  private static String eventName(int event, XMLStreamReader xmlStreamReader) {
+    switch (event) {
+      case XMLStreamConstants.END_ELEMENT:
+        return "END " + xmlStreamReader.getLocalName();
+      case XMLStreamConstants.START_ELEMENT:
+        return "START " + xmlStreamReader.getLocalName();
+      case XMLStreamConstants.CHARACTERS:
+        return "CHARACTERS '" + xmlStreamReader.getText() + "'";
+      default:
+        return String.valueOf(event);
+    }
+  }
 
+  private static int next(XMLStreamReader xmlStreamReader) throws XMLStreamException {
+    int event = xmlStreamReader.next();
+    LOGGER.debug("next {}", () -> eventName(event, xmlStreamReader));
+    return event;
+  }
+
+  static JsonArray xmlToJsonArray(int depth, XMLStreamReader xmlStreamReader, String skip)
+      throws XMLStreamException {
+    JsonArray ar = new JsonArray();
+    while (xmlStreamReader.hasNext()) {
+      int event = next(xmlStreamReader);
+      if (event == XMLStreamConstants.START_ELEMENT) {
+        Object o = xmlToJsonObject(depth + 1, xmlStreamReader, skip, event, true);
+        if (o instanceof JsonObject || o instanceof JsonArray) {
+          ar.add(o);
+        }
+      } else if (event != XMLStreamConstants.CHARACTERS) {
+        break;
+      }
+    }
+    return ar;
+  }
+
+  static Object xmlToJsonObject(int depth, XMLStreamReader xmlStreamReader, String skip, int event,
+      boolean arrayNode) throws XMLStreamException {
     StringBuilder text = null;
     JsonObject o = null;
-    while (xmlStreamReader.hasNext()) {
+    JsonArray ar = null;
+    while (true) {
       if (event == XMLStreamConstants.START_ELEMENT) {
         String localName = xmlStreamReader.getLocalName();
         if ("arr".equals(localName)) {
-          JsonArray ar = new JsonArray();
-          while (xmlStreamReader.hasNext()) {
-            event = xmlStreamReader.next();
-            if (event == XMLStreamConstants.END_ELEMENT) {
-              break;
-            }
-            Object x = xmlToJson(xmlStreamReader, skip, event, true);
-            if (x != null) {
-              ar.add(x);
-            }
-          }
-          return ar;
+          ar = xmlToJsonArray(depth, xmlStreamReader, skip);
         } else if (skip.equals(localName)) {
           int level = 0;
           while (xmlStreamReader.hasNext()) {
@@ -150,17 +179,19 @@ public class XmlJsonUtil {
             } else if (event == XMLStreamConstants.START_ELEMENT) {
               level++;
             }
-            event = xmlStreamReader.next();
+            event = next(xmlStreamReader);
           }
         } else {
-          event = xmlStreamReader.next();
+          event = next(xmlStreamReader);
           if (o == null) {
             o = new JsonObject();
           }
-          o.put(localName, xmlToJson(xmlStreamReader, skip, event, false));
-          if (arrayNode) {
+          o.put(localName, xmlToJsonObject(depth + 1, xmlStreamReader, skip, event, false));
+          if (!xmlStreamReader.hasNext() || arrayNode) {
             return o;
           }
+          event = next(xmlStreamReader);
+          continue;
         }
       } else if (!arrayNode && event == XMLStreamConstants.CHARACTERS) {
         if (text == null) {
@@ -170,9 +201,18 @@ public class XmlJsonUtil {
       } else {
         break;
       }
-      event = xmlStreamReader.next();
+      if (!xmlStreamReader.hasNext()) {
+        break;
+      }
+      event = next(xmlStreamReader);
     }
-    return o != null ? o : text;
+    if (ar != null) {
+      return ar;
+    } else if (o != null) {
+      return o;
+    } else {
+      return text;
+    }
   }
 
   /**
@@ -182,11 +222,12 @@ public class XmlJsonUtil {
    * @throws XMLStreamException bad XML
    */
   public static JsonObject inventoryXmlToJson(String xml) throws XMLStreamException {
+    LOGGER.info("inventoryXmlToJson {}", xml);
     InputStream stream = new ByteArrayInputStream(xml.getBytes());
     XMLInputFactory factory = XMLInputFactory.newInstance();
     factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
     XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
-    Object o = xmlToJson(xmlStreamReader, "original", xmlStreamReader.next(), false);
+    Object o = xmlToJsonObject(0, xmlStreamReader, "original", next(xmlStreamReader), false);
     if (o instanceof JsonObject) {
       return (JsonObject) o;
     }

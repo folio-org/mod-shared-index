@@ -224,6 +224,44 @@ public class XmlJsonUtilTest {
   }
 
   @Test
+  public void inventoryXmlToJson1() throws XMLStreamException {
+    Assert.assertEquals(new JsonObject()
+            .put("record",
+                new JsonArray()
+                    .add(new JsonObject().put("b", "1"))
+            ),
+        XmlJsonUtil.inventoryXmlToJson(""
+            + "<record>"
+            + "<arr> "
+            + "<b>1</b>"
+            + " </arr> "
+            + "</record>"
+        ));
+  }
+
+  @Test
+  public void inventoryXmlToJson2() throws XMLStreamException {
+    Assert.assertEquals(new JsonObject()
+            .put("record",
+                new JsonObject()
+                    .put("a", new JsonArray()
+                        .add(new JsonObject().put("b", "1"))
+                        .add(new JsonObject().put("b", "2")))
+                    .put("c", "2")),
+        XmlJsonUtil.inventoryXmlToJson(""
+            + "<record>"
+            + "<a>"
+            + "<arr> "
+            + "<b>1</b>"
+            + "<b>2</b>"
+            + " </arr> "
+            + " </a> "
+            + "<c>2</c>"
+            + "</record>"
+        ));
+  }
+
+  @Test
   public void inventoryXmlToJson() throws XMLStreamException {
     Assert.assertThrows(javax.xml.stream.XMLStreamException.class,
         () -> XmlJsonUtil.inventoryXmlToJson("hello"));
@@ -239,7 +277,17 @@ public class XmlJsonUtilTest {
     Assert.assertEquals(new JsonObject().put("a", new JsonObject().put("b","s")),
         XmlJsonUtil.inventoryXmlToJson("<a> <b>s</b> </a>"));
 
-    Assert.assertEquals(new JsonObject().put("a", new JsonObject().put("b", null).put("c", null)),
+    Assert.assertEquals(new JsonObject().put("a", new JsonObject()
+            .put("b", "s")
+            .put("c", "t")
+        ),
+        XmlJsonUtil.inventoryXmlToJson("<a> <b>s</b> <c>t</c> </a>"));
+
+    Assert.assertEquals(new JsonObject()
+            .put("a",
+                new JsonObject()
+                    .put("b", null)
+                    .put("c", null)),
         XmlJsonUtil.inventoryXmlToJson("<a><b/> <c/> </a>"));
 
     Assert.assertEquals(new JsonObject().put("a", new JsonArray()),
@@ -265,6 +313,53 @@ public class XmlJsonUtilTest {
                 .add(new JsonObject().put("b", "1"))
                 .add(new JsonObject().put("c", "2")))),
         XmlJsonUtil.inventoryXmlToJson("<a><arr><arr><b>1</b><c>2</c></arr></arr></a>"));
+
+    Assert.assertEquals(new JsonObject()
+            .put("record",
+                new JsonObject()
+                    .put("a", new JsonObject()
+                        .put("b", "1"))
+                    .put("u", "3")),
+        XmlJsonUtil.inventoryXmlToJson(""
+            + "<record>"
+            + " <a><b>1</b></a>\n"
+            + " <u>3</u>\n"
+            + "</record>"
+        ));
+    ;
+    Assert.assertEquals(new JsonObject()
+            .put("record",
+                new JsonObject()
+                    .put("a", new JsonArray()
+                        .add(new JsonObject().put("b", "1")))
+                    .put("c", "2")),
+        XmlJsonUtil.inventoryXmlToJson(""
+            + "<record>"
+            + "<a>"
+            + "<arr>"
+            + "<b>1</b>"
+            + "</arr>"
+            + "</a>"
+            + "<c>2</c>"
+            + "</record>"
+        ));
+
+    Assert.assertEquals(new JsonObject()
+            .put("record",
+                new JsonObject()
+                    .put("a", new JsonArray()
+                        .add(new JsonObject().put("b", "1")))
+                    .put("c", "2")),
+        XmlJsonUtil.inventoryXmlToJson(""
+            + "<record>"
+            + " <a>\n"
+            + "   <arr>\n"
+            + "     <b>1</b>\n"
+            + "   </arr>\n"
+            + " </a>\n"
+            + " <c>2</c>\n"
+            + "</record>"
+        ));
 
     Throwable t = Assert.assertThrows(IllegalArgumentException.class,
         () -> XmlJsonUtil.inventoryXmlToJson("<arr/>"));
