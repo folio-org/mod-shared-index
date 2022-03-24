@@ -299,7 +299,7 @@ public class Client {
               log.info(" --okapiurl url      (defaults to http://localhost:9130)");
               log.info(" --tenant tenant     (defaults to \"testlib\")");
               log.info(" --chunk sz          (defaults to 1)");
-              log.info("  -xsl file          (xslt transform for inventory payload)");
+              log.info(" --xsl file          (xslt transform for inventory payload)");
               log.info(" --init");
               log.info(" --purge");
               break;
