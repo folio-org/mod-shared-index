@@ -122,7 +122,7 @@ public class XmlJsonUtil {
     return marcJson;
   }
 
-  private static String eventName(int event, XMLStreamReader xmlStreamReader) {
+  static String getXmlStreamerEventInfo(int event, XMLStreamReader xmlStreamReader) {
     switch (event) {
       case XMLStreamConstants.END_ELEMENT:
         return "END " + xmlStreamReader.getLocalName();
@@ -137,7 +137,7 @@ public class XmlJsonUtil {
 
   private static int next(XMLStreamReader xmlStreamReader) throws XMLStreamException {
     int event = xmlStreamReader.next();
-    LOGGER.debug("next {}", () -> eventName(event, xmlStreamReader));
+    LOGGER.debug("next {}", () -> getXmlStreamerEventInfo(event, xmlStreamReader));
     return event;
   }
 

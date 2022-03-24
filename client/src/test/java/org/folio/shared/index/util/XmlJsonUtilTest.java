@@ -224,41 +224,19 @@ public class XmlJsonUtilTest {
   }
 
   @Test
-  public void inventoryXmlToJson1() throws XMLStreamException {
-    Assert.assertEquals(new JsonObject()
-            .put("record",
-                new JsonArray()
-                    .add(new JsonObject().put("b", "1"))
-            ),
-        XmlJsonUtil.inventoryXmlToJson(""
-            + "<record>"
-            + "<arr> "
-            + "<b>1</b>"
-            + " </arr> "
-            + "</record>"
-        ));
-  }
-
-  @Test
-  public void inventoryXmlToJson2() throws XMLStreamException {
-    Assert.assertEquals(new JsonObject()
-            .put("record",
-                new JsonObject()
-                    .put("a", new JsonArray()
-                        .add(new JsonObject().put("b", "1"))
-                        .add(new JsonObject().put("b", "2")))
-                    .put("c", "2")),
-        XmlJsonUtil.inventoryXmlToJson(""
-            + "<record>"
-            + "<a>"
-            + "<arr> "
-            + "<b>1</b>"
-            + "<b>2</b>"
-            + " </arr> "
-            + " </a> "
-            + "<c>2</c>"
-            + "</record>"
-        ));
+  public void getXmlStreamerEventInfo() throws XMLStreamException {
+    String collection = "<a>x</a>";
+    InputStream stream = new ByteArrayInputStream(collection.getBytes());
+    XMLInputFactory factory = XMLInputFactory.newInstance();
+    XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
+    int event = xmlStreamReader.next();
+    Assert.assertEquals("START a", XmlJsonUtil.getXmlStreamerEventInfo(event, xmlStreamReader));
+    event = xmlStreamReader.next();
+    Assert.assertEquals("CHARACTERS 'x'", XmlJsonUtil.getXmlStreamerEventInfo(event, xmlStreamReader));
+    event = xmlStreamReader.next();
+    Assert.assertEquals("END a", XmlJsonUtil.getXmlStreamerEventInfo(event, xmlStreamReader));
+    event = xmlStreamReader.next();
+    Assert.assertEquals("8", XmlJsonUtil.getXmlStreamerEventInfo(event, xmlStreamReader));
   }
 
   @Test
