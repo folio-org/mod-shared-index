@@ -44,26 +44,37 @@ Run the client with
 
     java -jar client/target/mod-shared-index-client-fat.jar [options] [files...]
 
-To see list options use `--help`.
+To see list options use `--help`. The client uses environment variables
+`OKAPI_URL`, `OKAPI_TENANT`, `OKAPI_TOKEN` for Okapi URL, tenant and
+token respectively.
 
-Before you can push record, you'll want to prepare the database for the tenant. If
-Okapi is used, then the install command will do it, but if you are running mod-shared-index module
-on its own, you must do that manually.
+Before you can push record, you'll want to prepare the database for the
+tenant. If Okapi is used, then the install command will do it, but if you
+are running mod-shared-index module on its own, you must do that manually.
 
 For example, to prepare database for tenant `diku` on server running on localhost:8081, use:
 
-    java  .. --okapiurl http://localhost:8081 --tenant diku --init
+    export OKAPI_TENANT=diku
+    export OKAPI_URL=http://localhost:8081
+    java -jar client/target/mod-shared-index-client-fat.jar --init
 
 Should you want to purge the data, use:
 
-    java  .. --okapiurl http://localhost:8081 --tenant diku --purge
+    export OKAPI_TENANT=diku
+    export OKAPI_URL=http://localhost:8081
+    java -jar client/target/mod-shared-index-client-fat.jar --purge
 
 To send MARCXML to the same server with defined sourceId:
 
-    java  .. --okapiurl http://localhost:8081 --tenant diku \
+    export OKAPI_TENANT=diku
+    export OKAPI_URL=http://localhost:8081
+    export sourceid=`uuidgen`
+    java -jar client/target/mod-shared-index-client-fat.jar \
       --source $sourceid \
       --xsl client/src/test/resources/marc2inventory-instance.xsl \
       client/src/test/resources/record10.xml
+
+The option `--xsl` may be repeated for a sequence of transformations.
 
 ## Additional information
 

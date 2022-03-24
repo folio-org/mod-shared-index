@@ -115,13 +115,13 @@ public class ClientTest {
     Future<Void> future = httpServer.listen(PORT).mapEmpty();
 
     UUID sourceId = UUID.randomUUID();
-    String [] args =
-        { "--okapiurl", "http://localhost:" + PORT,
-            "--tenant", "testlib",
-            "--source", sourceId.toString(),
-            "--purge",
-            "--init"};
-    future = future.compose(x -> Client.exec(webClient, args));
+    String [] args = {
+        "--source", sourceId.toString(),
+        "--purge",
+        "--init"
+    };
+    Client client = new Client(webClient, "http://localhost:" + PORT, null, "testlib");
+    future = future.compose(x -> Client.exec(client, args));
     future.eventually(x -> httpServer.close())
         .onComplete(context.asyncAssertSuccess());
   }
@@ -148,14 +148,14 @@ public class ClientTest {
     Future<Void> future = httpServer.listen(PORT).mapEmpty();
 
     UUID sourceId = UUID.randomUUID();
-    String [] args =
-        { "--okapiurl", "http://localhost:" + PORT,
-            "--chunk", "2",
-            "--tenant", "testlib",
-            "--source", sourceId.toString(),
-            "--xsl", "src/test/resources/marc2inventory-instance.xsl",
-            "src/test/resources/marc3.marc"};
-    future = future.compose(x -> Client.exec(webClient, args));
+    String [] args = {
+        "--chunk", "2",
+        "--source", sourceId.toString(),
+        "--xsl", "src/test/resources/marc2inventory-instance.xsl",
+        "src/test/resources/marc3.marc"
+    };
+    Client client = new Client(webClient, "http://localhost:" + PORT, null, "testlib");
+    future = future.compose(x -> Client.exec(client, args));
 
     future.eventually(x -> httpServer.close())
         .onComplete(context.asyncAssertSuccess(res -> {
@@ -197,14 +197,14 @@ public class ClientTest {
     Future<Void> future = httpServer.listen(PORT).mapEmpty();
 
     UUID sourceId = UUID.randomUUID();
-    String [] args =
-        { "--okapiurl", "http://localhost:" + PORT,
-            "--chunk", "4",
-            "--tenant", "testlib",
-            "--source", sourceId.toString(),
-            "--xsl", "src/test/resources/marc2inventory-instance.xsl",
-            "src/test/resources/record10.xml"};
-    future = future.compose(x -> Client.exec(webClient, args));
+    String [] args = {
+        "--chunk", "4",
+        "--source", sourceId.toString(),
+        "--xsl", "src/test/resources/marc2inventory-instance.xsl",
+        "src/test/resources/record10.xml"
+    };
+    Client client = new Client(webClient, "http://localhost:" + PORT, null, "testlib");
+    future = future.compose(x -> Client.exec(client, args));
 
     future.eventually(x -> httpServer.close())
         .onComplete(context.asyncAssertSuccess(res -> {

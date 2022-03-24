@@ -1,6 +1,7 @@
 package org.folio.shared.index.client;
 
 import io.vertx.core.Future;
+import io.vertx.core.MultiMap;
 import io.vertx.core.Promise;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -10,10 +11,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
@@ -36,17 +35,29 @@ public class Client {
   static final Logger log = LogManager.getLogger(Client.class);
 
   UUID sourceId = UUID.randomUUID();
-  String tenant = "testlib";
-  String okapiUrl = "http://localhost:9130";
+  MultiMap headers = MultiMap.caseInsensitiveMultiMap();
   int chunkSize = 1;
   Integer localSequence = 0;
   WebClient webClient;
-  Map<String,String> headers = new HashMap<>();
   TransformerFactory transformerFactory = TransformerFactory.newInstance();
   List<Transformer> transformers = new LinkedList<>();
 
+  /**
+   * Construct client.
+   * @param webClient WebClient to use
+   */
   public Client(WebClient webClient) {
+    headers.set(XOkapiHeaders.URL, System.getenv("OKAPI_URL"));
+    headers.set(XOkapiHeaders.TOKEN, System.getenv("OKAPI_TOKEN"));
+    headers.set(XOkapiHeaders.TENANT, System.getenv("OKAPI_TENANT"));
     this.webClient = webClient;
+  }
+
+  Client(WebClient webClient, String url, String token, String tenant) {
+    this(webClient);
+    headers.set(XOkapiHeaders.URL, url);
+    headers.set(XOkapiHeaders.TOKEN, token);
+    headers.set(XOkapiHeaders.TENANT, tenant);
   }
 
   public void setSourceId(UUID sourceId) {
@@ -55,14 +66,6 @@ public class Client {
 
   public void setChunkSize(int chunkSize) {
     this.chunkSize = chunkSize;
-  }
-
-  public void setTenant(String tenant) {
-    headers.put(XOkapiHeaders.TENANT, tenant);
-  }
-
-  public void setOkapiUrl(String okapiUrl) {
-    this.okapiUrl = okapiUrl;
   }
 
   private void incrementSequence() {
@@ -104,9 +107,8 @@ public class Client {
         .put("sourceId", sourceId)
         .put("records", records);
 
-    webClient.putAbs(okapiUrl + "/shared-index/records")
-        .putHeader(XOkapiHeaders.TENANT, tenant)
-        .putHeader(XOkapiHeaders.URL, okapiUrl)
+    webClient.putAbs(headers.get(XOkapiHeaders.URL) + "/shared-index/records")
+        .putHeaders(headers)
         .expect(ResponsePredicate.SC_OK)
         .expect(ResponsePredicate.JSON)
         .sendJsonObject(request)
@@ -138,9 +140,8 @@ public class Client {
         .put("sourceId", sourceId)
         .put("records", records);
 
-    webClient.putAbs(okapiUrl + "/shared-index/records")
-        .putHeader(XOkapiHeaders.TENANT, tenant)
-        .putHeader(XOkapiHeaders.URL, okapiUrl)
+    webClient.putAbs(headers.get(XOkapiHeaders.URL) + "/shared-index/records")
+        .putHeaders(headers)
         .expect(ResponsePredicate.SC_OK)
         .expect(ResponsePredicate.JSON)
         .sendJsonObject(request)
@@ -170,9 +171,9 @@ public class Client {
   }
 
   private Future<Void> tenantOp(JsonObject request) {
+    String okapiUrl = headers.get(XOkapiHeaders.URL);
     return webClient.postAbs(okapiUrl + "/_/tenant")
-        .putHeader(XOkapiHeaders.TENANT, tenant)
-        .putHeader(XOkapiHeaders.URL, okapiUrl)
+        .putHeaders(headers)
         .sendJsonObject(request).compose(res -> {
           if (res.statusCode() == 204 || res.statusCode() == 200) {
             return Future.succeededFuture();
@@ -181,8 +182,7 @@ public class Client {
           }
           String id = res.bodyAsJsonObject().getString("id");
           return webClient.getAbs(okapiUrl + "/_/tenant/" + id + "?wait=10000")
-              .putHeader(XOkapiHeaders.TENANT, tenant)
-              .putHeader(XOkapiHeaders.URL, okapiUrl)
+              .putHeaders(headers)
               .expect(ResponsePredicate.SC_OK)
               .expect(ResponsePredicate.JSON).send()
               .compose(res2 -> {
@@ -197,8 +197,7 @@ public class Client {
               })
               .compose(x ->
                 webClient.deleteAbs(okapiUrl + "/_/tenant/" + id)
-                    .putHeader(XOkapiHeaders.TENANT, tenant)
-                    .putHeader(XOkapiHeaders.URL, okapiUrl)
+                    .putHeaders(headers)
                     .expect(ResponsePredicate.SC_NO_CONTENT)
                     .send().mapEmpty()
               );
@@ -285,8 +284,12 @@ public class Client {
    * @return async result
    */
   public static Future<Void> exec(WebClient webClient, String[] args) {
+    Client client = new Client(webClient);
+    return exec(client, args);
+  }
+
+  static Future<Void> exec(Client client, String[] args) {
     try {
-      Client client = new Client(webClient);
       Future<Void> future = Future.succeededFuture();
       int i = 0;
       while (i < args.length) {
@@ -296,8 +299,6 @@ public class Client {
             case "help":
               log.info("[options] [file..]");
               log.info(" --source sourceId   (defaults to random UUID)");
-              log.info(" --okapiurl url      (defaults to http://localhost:9130)");
-              log.info(" --tenant tenant     (defaults to \"testlib\")");
               log.info(" --chunk sz          (defaults to 1)");
               log.info(" --xsl file          (xslt transform for inventory payload)");
               log.info(" --init");
@@ -306,14 +307,6 @@ public class Client {
             case "source":
               arg = getArgument(args, ++i);
               client.setSourceId(UUID.fromString(arg));
-              break;
-            case "okapiurl":
-              arg = getArgument(args, ++i);
-              client.setOkapiUrl(arg);
-              break;
-            case "tenant":
-              arg = getArgument(args, ++i);
-              client.setTenant(arg);
               break;
             case "chunk":
               arg = getArgument(args, ++i);
