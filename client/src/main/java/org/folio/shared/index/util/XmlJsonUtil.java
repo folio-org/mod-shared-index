@@ -158,6 +158,21 @@ public class XmlJsonUtil {
     return ar;
   }
 
+  static void xmlToJsonSkip(XMLStreamReader xmlStreamReader, int event) throws XMLStreamException {
+    int level = 0;
+    while (xmlStreamReader.hasNext()) {
+      if (event == XMLStreamConstants.END_ELEMENT) {
+        level--;
+        if (level == 0) {
+          break;
+        }
+      } else if (event == XMLStreamConstants.START_ELEMENT) {
+        level++;
+      }
+      event = next(xmlStreamReader);
+    }
+  }
+
   static Object xmlToJsonObject(int depth, XMLStreamReader xmlStreamReader, String skip, int event,
       boolean arrayNode) throws XMLStreamException {
     StringBuilder text = null;
@@ -169,18 +184,7 @@ public class XmlJsonUtil {
         if ("arr".equals(localName)) {
           ar = xmlToJsonArray(depth, xmlStreamReader, skip);
         } else if (skip.equals(localName)) {
-          int level = 0;
-          while (xmlStreamReader.hasNext()) {
-            if (event == XMLStreamConstants.END_ELEMENT) {
-              level--;
-              if (level == 0) {
-                break;
-              }
-            } else if (event == XMLStreamConstants.START_ELEMENT) {
-              level++;
-            }
-            event = next(xmlStreamReader);
-          }
+          xmlToJsonSkip(xmlStreamReader, event);
         } else {
           event = next(xmlStreamReader);
           if (o == null) {
@@ -190,8 +194,6 @@ public class XmlJsonUtil {
           if (!xmlStreamReader.hasNext() || arrayNode) {
             return o;
           }
-          event = next(xmlStreamReader);
-          continue;
         }
       } else if (!arrayNode && event == XMLStreamConstants.CHARACTERS) {
         if (text == null) {
