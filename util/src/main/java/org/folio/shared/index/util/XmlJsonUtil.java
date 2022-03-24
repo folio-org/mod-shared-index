@@ -33,13 +33,19 @@ import org.xml.sax.SAXException;
 public class XmlJsonUtil {
   private static final Logger LOGGER = LogManager.getLogger(XmlJsonUtil.class);
 
-  private static final String MARC_COLLECTION = "collection";
-  private static final String MARC_RECORD = "record";
+  private static final String COLLECTION_LABEL = "collection";
+  private static final String RECORD_LABEL = "record";
+  private static final String LEADER_LABEL = "leader";
+  private static final String DATAFIELD_LABEL = "datafield";
+  private static final String CONTROLFIELD_LABEL = "controlfield";
+  private static final String TAG_LABEL = "tag";
+  private static final String SUBFIELD_LABEL = "subfield";
+  private static final String CODE_LABEL = "code";
 
   private XmlJsonUtil() { }
 
   /**
-   * Convert MARCXML to some unspecified JSON format.
+   * Convert MARCXML to MARC-in-JSON.
    * @param marcXml MARCXML XML string
    * @return JSON object.
    * @throws SAXException some sax exception
@@ -58,12 +64,12 @@ public class XmlJsonUtil {
     Document document = documentBuilder.parse(new InputSource(new StringReader(marcXml)));
     Element root = document.getDocumentElement();
     Element recordElement = null;
-    if (MARC_RECORD.equals(root.getLocalName())) {
+    if (RECORD_LABEL.equals(root.getLocalName())) {
       recordElement = root;
-    } else if (MARC_COLLECTION.equals(root.getLocalName())) {
+    } else if (COLLECTION_LABEL.equals(root.getLocalName())) {
       Node node = root.getFirstChild();
       while (node != null) {
-        if (MARC_RECORD.equals(node.getLocalName())) {
+        if (RECORD_LABEL.equals(node.getLocalName())) {
           if (recordElement != null) {
             throw new IllegalArgumentException("can not handle multiple records");
           }
@@ -84,14 +90,14 @@ public class XmlJsonUtil {
       }
       Element childElement = (Element) childNode;
       String textContent = childElement.getTextContent();
-      if (childElement.getLocalName().equals("leader")) {
+      if (childElement.getLocalName().equals(LEADER_LABEL)) {
         marcJson.put("leader", textContent);
-      } else if (childElement.getLocalName().equals("controlfield")) {
+      } else if (childElement.getLocalName().equals(CONTROLFIELD_LABEL)) {
         JsonObject field = new JsonObject();
-        String marcTag = childElement.getAttribute("tag");
+        String marcTag = childElement.getAttribute(TAG_LABEL);
         field.put(marcTag, textContent);
         fields.add(field);
-      } else if (childElement.getLocalName().equals("datafield")) {
+      } else if (childElement.getLocalName().equals(DATAFIELD_LABEL)) {
         JsonObject fieldContent = new JsonObject();
         if (childElement.hasAttribute("ind1")) {
           fieldContent.put("ind1", childElement.getAttribute("ind1"));
@@ -101,17 +107,17 @@ public class XmlJsonUtil {
         }
         JsonArray subfields = new JsonArray();
         fieldContent.put("subfields", subfields);
-        NodeList nodeList = childElement.getElementsByTagNameNS("*", "subfield");
+        NodeList nodeList = childElement.getElementsByTagNameNS("*", SUBFIELD_LABEL);
         for (int i = 0; i < nodeList.getLength(); i++) {
           Element subField = (Element) nodeList.item(i);
-          String code = subField.getAttribute("code");
+          String code = subField.getAttribute(CODE_LABEL);
           String content = subField.getTextContent();
           JsonObject subfieldJson = new JsonObject();
           subfieldJson.put(code, content);
           subfields.add(subfieldJson);
         }
         JsonObject field = new JsonObject();
-        String marcTag = childElement.getAttribute("tag");
+        String marcTag = childElement.getAttribute(TAG_LABEL);
         field.put(marcTag, fieldContent);
         fields.add(field);
       }
@@ -313,10 +319,10 @@ public class XmlJsonUtil {
   }
 
   static JsonObject createIngestRecord(JsonObject marcPayload, JsonObject stylesheetResult) {
-    if (stylesheetResult.containsKey(MARC_COLLECTION)) {
-      stylesheetResult = stylesheetResult.getJsonObject(MARC_COLLECTION);
+    if (stylesheetResult.containsKey(COLLECTION_LABEL)) {
+      stylesheetResult = stylesheetResult.getJsonObject(COLLECTION_LABEL);
     }
-    JsonObject inventoryPayload = stylesheetResult.getJsonObject(MARC_RECORD);
+    JsonObject inventoryPayload = stylesheetResult.getJsonObject(RECORD_LABEL);
     if (inventoryPayload == null) {
       throw new IllegalArgumentException("inventory xml: missing record property");
     }
