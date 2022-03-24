@@ -222,7 +222,6 @@ public class XmlJsonUtil {
    * @throws XMLStreamException bad XML
    */
   public static JsonObject inventoryXmlToJson(String xml) throws XMLStreamException {
-    LOGGER.info("inventoryXmlToJson {}", xml);
     InputStream stream = new ByteArrayInputStream(xml.getBytes());
     XMLInputFactory factory = XMLInputFactory.newInstance();
     factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
