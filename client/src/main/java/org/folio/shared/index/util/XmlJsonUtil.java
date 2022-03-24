@@ -224,7 +224,10 @@ public class XmlJsonUtil {
     factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
     XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
     Object o = xmlToJsonObject(0, xmlStreamReader, "original", next(xmlStreamReader), false);
-    return (JsonObject) o;
+    if (o instanceof JsonObject) {
+      return (JsonObject) o;
+    }
+    throw new IllegalArgumentException("xmlToJsonObject not returning JsonObject");
   }
 
   private static String encodeXmlText(String s) {

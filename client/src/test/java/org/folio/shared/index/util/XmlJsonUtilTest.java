@@ -339,8 +339,9 @@ public class XmlJsonUtilTest {
             + "</record>"
         ));
 
-    Assert.assertThrows(ClassCastException.class,
+    Throwable t = Assert.assertThrows(IllegalArgumentException.class,
         () -> XmlJsonUtil.inventoryXmlToJson("<arr><a/></arr>"));
+    Assert.assertEquals("xmlToJsonObject not returning JsonObject", t.getMessage());
 
     Assert.assertEquals(new JsonObject().put("a", new JsonObject().put("b", null)),
         XmlJsonUtil.inventoryXmlToJson("<a><original><a><b><c></c>1</b></a></original><b/></a>"));
