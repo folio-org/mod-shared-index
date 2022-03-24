@@ -91,7 +91,7 @@ public class XmlJsonUtil {
       Element childElement = (Element) childNode;
       String textContent = childElement.getTextContent();
       if (childElement.getLocalName().equals(LEADER_LABEL)) {
-        marcJson.put("leader", textContent);
+        marcJson.put(LEADER_LABEL, textContent);
       } else if (childElement.getLocalName().equals(CONTROLFIELD_LABEL)) {
         JsonObject field = new JsonObject();
         String marcTag = childElement.getAttribute(TAG_LABEL);
