@@ -304,7 +304,7 @@ public class Storage {
                 .compose(res -> {
                   RowIterator<Row> iterator = res.iterator();
                   if (!iterator.hasNext()) {
-                    return null;
+                    return Future.succeededFuture();
                   }
                   Row row = iterator.next();
                   String method = row.getString("method");

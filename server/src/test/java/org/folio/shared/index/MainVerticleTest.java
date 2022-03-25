@@ -533,6 +533,15 @@ public class MainVerticleTest {
         .header(XOkapiHeaders.TENANT, tenant1)
         .delete("/shared-index/config/matchkeys/" + matchKey.getString("id"))
         .then().statusCode(204);
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey.encode())
+        .put("/shared-index/config/matchkeys/" + matchKey.getString("id") + "/initialize")
+        .then().statusCode(404)
+        .contentType("text/plain")
+        .body(is("MatchKey isbn not found"));
   }
 
   @Test
