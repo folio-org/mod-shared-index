@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
+import io.vertx.ext.web.client.WebClient;
+import io.vertx.ext.web.client.predicate.ResponsePredicate;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.folio.okapi.common.XOkapiHeaders;
@@ -51,6 +53,7 @@ public class MainVerticleTest {
   @BeforeClass
   public static void beforeClass(TestContext context) throws IOException {
     vertx = Vertx.vertx();
+    WebClient webClient = WebClient.create(vertx);
 
     RestAssured.config=RestAssuredConfig.config()
         .httpClient(HttpClientConfig.httpClientConfig()
@@ -80,7 +83,7 @@ public class MainVerticleTest {
         .replace("${artifactId}", "mod-shared-index")
         .replace("${version}", "1.0.0");
 
-    f.onComplete(context.asyncAssertSuccess(res -> {
+    f = f.compose(e -> {
       // post the module descriptor
       RestAssured.given()
           .header("Content-Type", "application/json")
@@ -106,16 +109,14 @@ public class MainVerticleTest {
           .post("/_/proxy/tenants")
           .then().statusCode(201);
 
-      // ane enable module for that tenant
-      RestAssured.given()
-          .header("Content-Type", "application/json")
-          .body(new JsonArray().add(new JsonObject()
+      return webClient.postAbs(OKAPI_URL + "/_/proxy/tenants/" + tenant1 + "/install")
+          .expect(ResponsePredicate.SC_OK)
+              .sendJson(new JsonArray().add(new JsonObject()
                   .put("id", "mod-shared-index")
                   .put("action", "enable"))
-              .encode())
-          .post("/_/proxy/tenants/" + tenant1 + "/install")
-          .then().statusCode(200);
-    }));
+              ).mapEmpty();
+    });
+    f.onComplete(context.asyncAssertSuccess());
   }
 
   @AfterClass
