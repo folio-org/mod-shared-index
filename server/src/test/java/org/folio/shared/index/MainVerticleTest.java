@@ -83,39 +83,38 @@ public class MainVerticleTest {
         .replace("${artifactId}", "mod-shared-index")
         .replace("${version}", "1.0.0");
 
-    f = f.compose(e -> {
-      // post the module descriptor
-      RestAssured.given()
-          .header("Content-Type", "application/json")
-          .body(md)
-          .post("/_/proxy/modules")
-          .then().statusCode(201);
+    // register module
+    f = f.compose(t ->
+        webClient.postAbs(OKAPI_URL + "/_/proxy/modules")
+            .expect(ResponsePredicate.SC_CREATED)
+            .sendJsonObject(new JsonObject(md))
+            .mapEmpty());
 
-      // tell okapi where our module is running
-      RestAssured.given()
-          .header("Content-Type", "application/json")
-          .body(new JsonObject()
-              .put("instId", "mod-shared-index-1.0.0")
-              .put("srvcId", "mod-shared-index-1.0.0")
-              .put("url", MODULE_URL)
-              .encode())
-          .post("/_/discovery/modules")
-          .then().statusCode(201);
+    // tell okapi where our module is running
+    f = f.compose(t ->
+        webClient.postAbs(OKAPI_URL + "/_/discovery/modules")
+            .expect(ResponsePredicate.SC_CREATED)
+            .sendJsonObject(new JsonObject()
+                    .put("instId", "mod-shared-index-1.0.0")
+                    .put("srvcId", "mod-shared-index-1.0.0")
+                    .put("url", MODULE_URL))
+            .mapEmpty());
 
-      // create tenant
-      RestAssured.given()
-          .header("Content-Type", "application/json")
-          .body(new JsonObject().put("id", tenant1).encode())
-          .post("/_/proxy/tenants")
-          .then().statusCode(201);
+    // create tenant
+    f = f.compose(t ->
+        webClient.postAbs(OKAPI_URL + "/_/proxy/tenants")
+            .expect(ResponsePredicate.SC_CREATED)
+            .sendJsonObject(new JsonObject().put("id", tenant1))
+            .mapEmpty());
 
-      return webClient.postAbs(OKAPI_URL + "/_/proxy/tenants/" + tenant1 + "/install")
-          .expect(ResponsePredicate.SC_OK)
-              .sendJson(new JsonArray().add(new JsonObject()
-                  .put("id", "mod-shared-index")
-                  .put("action", "enable"))
-              ).mapEmpty();
-    });
+    // enable module for tenant
+    f = f.compose(e ->
+        webClient.postAbs(OKAPI_URL + "/_/proxy/tenants/" + tenant1 + "/install")
+            .expect(ResponsePredicate.SC_OK)
+            .sendJson(new JsonArray().add(new JsonObject()
+                .put("id", "mod-shared-index")
+                .put("action", "enable")))
+                .mapEmpty());
     f.onComplete(context.asyncAssertSuccess());
   }
 
