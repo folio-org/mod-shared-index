@@ -20,10 +20,10 @@ public class MatchKeyJsonPathTest {
   @Test
   public void matchKeyJsonPathNonConfigured() {
     MatchKeyMethod matchKeyMethod = new MatchKeyJsonPath();
-    Buffer buffer = Buffer.buffer();
+    JsonObject payload = new JsonObject();
     Exception e = Assert.assertThrows(
         MatchKeyException.class,
-        () -> matchKeyMethod.getKeys(buffer, buffer));
+        () -> matchKeyMethod.getKeys(payload, payload));
     assertThat(e.getMessage(), is("Not configured"));
   }
 
@@ -66,7 +66,7 @@ public class MatchKeyJsonPathTest {
                 )
             )
         );
-    List<String> keys = matchKeyMethod.getKeys(Buffer.buffer(marc.encode()), Buffer.buffer());
+    List<String> keys = matchKeyMethod.getKeys(marc, new JsonObject());
     assertThat(keys, is(empty()));
 
     marc = new JsonObject()
@@ -86,7 +86,7 @@ public class MatchKeyJsonPathTest {
                 )
             )
         );
-    keys = matchKeyMethod.getKeys(Buffer.buffer(marc.encode()), Buffer.buffer());
+    keys = matchKeyMethod.getKeys(marc, new JsonObject());
     assertThat(keys, contains("73209622", "73209623"));
   }
 
@@ -97,13 +97,13 @@ public class MatchKeyJsonPathTest {
     JsonObject inventory = new JsonObject()
         .put("inventory", new JsonObject()
             .put("isbn", new JsonArray().add("73209622")));
-    List<String> keys = matchKeyMethod.getKeys(Buffer.buffer(), Buffer.buffer(inventory.encode()));
+    List<String> keys = matchKeyMethod.getKeys(new JsonObject(), inventory);
     assertThat(keys, contains("73209622"));
 
     inventory = new JsonObject()
         .put("inventory", new JsonObject()
             .put("issn", new JsonArray().add("73209622")));
-    keys = matchKeyMethod.getKeys(Buffer.buffer(), Buffer.buffer(inventory.encode()));
+    keys = matchKeyMethod.getKeys(new JsonObject(), inventory);
     assertThat(keys, is(empty()));
   }
 }

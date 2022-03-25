@@ -21,5 +21,5 @@ public interface MatchKeyMethod {
 
   void configure(JsonObject configuration);
 
-  List<String> getKeys(Buffer marcPayload, Buffer inventoryPayload);
+  List<String> getKeys(JsonObject marcPayload, JsonObject inventoryPayload);
 }
