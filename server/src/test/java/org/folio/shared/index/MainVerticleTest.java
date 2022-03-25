@@ -2,6 +2,8 @@ package org.folio.shared.index;
 
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
+import io.restassured.config.HttpClientConfig;
+import io.restassured.config.RestAssuredConfig;
 import io.restassured.response.ExtractableResponse;
 import io.restassured.response.Response;
 import io.vertx.core.DeploymentOptions;
@@ -49,6 +51,12 @@ public class MainVerticleTest {
   @BeforeClass
   public static void beforeClass(TestContext context) throws IOException {
     vertx = Vertx.vertx();
+
+    RestAssured.config=RestAssuredConfig.config()
+        .httpClient(HttpClientConfig.httpClientConfig()
+            .setParam("http.socket.timeout", 10000)
+            .setParam("http.connection.timeout", 5000));
+
     RestAssured.enableLoggingOfRequestAndResponseIfValidationFails();
     RestAssured.baseURI = OKAPI_URL;
     RestAssured.requestSpecification = new RequestSpecBuilder().build();
