@@ -1,6 +1,7 @@
 package org.folio.shared.index.storage;
 
 import io.vertx.core.Future;
+import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -17,9 +18,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.folio.shared.index.matchkey.MatchKeyMethod;
 import org.folio.tlib.postgres.TenantPgPool;
 import org.folio.tlib.util.TenantUtil;
 
@@ -74,7 +77,7 @@ public class Storage {
                 + " params JSONB)",
             CREATE_IF_NO_EXISTS + matchKeyValueTable
                 + "(bib_record_id uuid NOT NULL,"
-                + " match_key_config_id uuid NOT NULL,"
+                + " match_key_config_id VARCHAR NOT NULL,"
                 + " match_value VARCHAR NOT NULL,"
                 + " CONSTRAINT match_key_value_fk_bib_record FOREIGN KEY "
                 + "                (bib_record_id) REFERENCES " + bibRecordTable + ")",
@@ -238,6 +241,84 @@ public class Storage {
             .put("params", row.getJsonObject("params")));
   }
 
+  Future<Void> cleanMatchKeyTable(SqlConnection connection, String matchKeyMethodId) {
+    return connection.preparedQuery("DELETE FROM " + matchKeyValueTable
+        + " WHERE match_key_config_id = $1").execute(
+        Tuple.of(matchKeyMethodId)).mapEmpty();
+  }
+
+  Future<Void> upsertMatchKeyTable(SqlConnection connection, String matchKeyMethodId, UUID globalId,
+      String key) {
+    return connection.preparedQuery("INSERT INTO " + matchKeyValueTable
+        + " (bib_record_id, match_key_config_id, match_value)"
+        + " VALUES ($1, $2, $3)").execute(
+        Tuple.of(globalId, matchKeyMethodId, key)).mapEmpty();
+  }
+
+  Future<JsonObject> recalculateMatchKey(SqlConnection connection, MatchKeyMethod method,
+      String matchKeyMethodId, int fetchSize) {
+
+    String query = "SELECT * FROM " + bibRecordTable;
+    AtomicInteger count = new AtomicInteger();
+    return cleanMatchKeyTable(connection, matchKeyMethodId)
+        .compose(x -> connection.prepare(query).compose(pq ->
+            connection.begin().compose(tx -> {
+              RowStream<Row> stream = pq.createStream(fetchSize);
+              Promise<JsonObject> promise = Promise.promise();
+              stream.handler(row -> {
+                count.incrementAndGet();
+                List<String> keys =
+                    method.getKeys(row.getJsonObject("marc_payload"),
+                        row.getJsonObject("inventory_payload"));
+                for (String key : keys) {
+                  upsertMatchKeyTable(connection, matchKeyMethodId, row.getUUID("id"), key)
+                      .onFailure(u -> log.error(u.getMessage(), u));
+                }
+              });
+              stream.endHandler(end -> {
+                tx.commit();
+                promise.complete(new JsonObject().put("count", count.get()));
+              });
+              stream.exceptionHandler(e -> {
+                log.error(e.getMessage(), e);
+                tx.commit();
+                promise.fail(e);
+              });
+              return promise.future();
+            })
+        ));
+  }
+
+  /**
+   * Initialize match key (populate clusters).
+   * @param id match key id (user specified)
+   * @param fetchSize for stream fetch
+   * @return statistics
+   */
+  public Future<JsonObject> initializeMatchKey(String id, int fetchSize) {
+    return pool.getConnection()
+        .compose(connection ->
+            connection.preparedQuery(
+                    "SELECT * FROM " + matchKeyConfigTable + " WHERE id = $1")
+                .execute(Tuple.of(id))
+                .compose(res -> {
+                  RowIterator<Row> iterator = res.iterator();
+                  if (!iterator.hasNext()) {
+                    return null;
+                  }
+                  Row row = iterator.next();
+                  String method = row.getString("method");
+                  JsonObject params = row.getJsonObject("params");
+                  MatchKeyMethod matchKeyMethod = MatchKeyMethod.get(method);
+                  if (matchKeyMethod == null) {
+                    return Future.failedFuture("Unknown match key method: " + method);
+                  }
+                  matchKeyMethod.configure(params);
+                  return recalculateMatchKey(connection, matchKeyMethod, id, fetchSize);
+                })
+                .eventually(x -> connection.close())
+        );
+  }
 
   private static JsonObject copyWithoutNulls(JsonObject obj) {
     JsonObject n = new JsonObject();

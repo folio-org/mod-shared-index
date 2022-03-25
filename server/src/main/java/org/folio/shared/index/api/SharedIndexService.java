@@ -137,6 +137,20 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
         pgCqlQuery.getOrderByClause());
   }
 
+  Future<Void> initializeMatchKey(RoutingContext ctx) {
+    RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
+    String id = stringOrNull(params.pathParameter("id"));
+    Storage storage = new Storage(ctx);
+    return storage.initializeMatchKey(id, 2)
+        .onSuccess(res -> {
+          if (res == null) {
+            HttpResponse.responseError(ctx, 404, "MatchKey " + id + " not found");
+            return;
+          }
+          HttpResponse.responseJson(ctx, 200).end(res.encode());
+        })
+        .mapEmpty();
+  }
 
   static void failHandler(RoutingContext ctx) {
     Throwable t = ctx.failure();
@@ -181,6 +195,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
           add(routerBuilder, "getMatchKey", this::getMatchKey);
           add(routerBuilder, "deleteMatchKey", this::deleteMatchKey);
           add(routerBuilder, "getMatchKeys", this::getMatchKeys);
+          add(routerBuilder, "initializeMatchKey", this::initializeMatchKey);
           return routerBuilder.createRouter();
         });
   }
