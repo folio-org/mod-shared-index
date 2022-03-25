@@ -150,7 +150,7 @@ public class Storage {
     if (sqlWhere != null) {
       from = from + " WHERE " + sqlWhere;
     }
-    return streamResult(ctx, null, from, sqlOrderBy, "items", row -> getSharedRecordObject(row));
+    return streamResult(ctx, null, from, sqlOrderBy, "items", Storage::getSharedRecordObject);
   }
 
   /**

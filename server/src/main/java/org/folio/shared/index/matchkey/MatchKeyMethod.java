@@ -1,6 +1,5 @@
 package org.folio.shared.index.matchkey;
 
-import io.vertx.core.buffer.Buffer;
 import io.vertx.core.json.JsonObject;
 import java.util.List;
 import org.folio.shared.index.matchkey.impl.MatchKeyJsonPath;
