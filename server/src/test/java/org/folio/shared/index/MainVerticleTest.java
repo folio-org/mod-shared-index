@@ -63,7 +63,10 @@ public class MainVerticleTest {
 
     // deploy okapi
     DeploymentOptions okapiOptions = new DeploymentOptions();
-    okapiOptions.setConfig(new JsonObject().put("port", Integer.toString(OKAPI_PORT)));
+    okapiOptions.setConfig(new JsonObject()
+        .put("port", Integer.toString(OKAPI_PORT))
+        .put("mode", "dev")
+    );
     Future<Void> f = vertx.deployVerticle(new org.folio.okapi.MainVerticle(), okapiOptions).mapEmpty();
 
     // deploy this module
