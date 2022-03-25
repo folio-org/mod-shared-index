@@ -6,6 +6,7 @@ import io.restassured.config.HttpClientConfig;
 import io.restassured.config.RestAssuredConfig;
 import io.restassured.response.ExtractableResponse;
 import io.restassured.response.Response;
+import io.restassured.response.ResponseBodyExtractionOptions;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
@@ -405,16 +406,31 @@ public class MainVerticleTest {
         .body("items[1].sourceId", is(sourceId))
         .body("resultInfo.totalRecords", is(2));
 
-    RestAssured.given()
+    String res = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
-        .body(request.encode())
         .get("/shared-index/records?query=sourceId==" + sourceId)
         .then().statusCode(200)
         .body("items", hasSize(2))
         .body("items[0].sourceId", is(sourceId))
         .body("items[1].sourceId", is(sourceId))
-        .body("resultInfo.totalRecords", is(2));
+        .body("resultInfo.totalRecords", is(2))
+        .extract().body().asString();
+    JsonObject jsonResponse = new JsonObject(res);
+    String globalId = jsonResponse.getJsonArray("items").getJsonObject(0).getString("globalId");
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .get("/shared-index/records/" + globalId)
+        .then().statusCode(200)
+        .body("sourceId", is(sourceId));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .get("/shared-index/records/" + UUID.randomUUID())
+        .then().statusCode(404);
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)

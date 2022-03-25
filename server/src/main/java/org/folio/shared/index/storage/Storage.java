@@ -129,6 +129,15 @@ public class Storage {
     });
   }
 
+  static JsonObject getSharedRecordObject(Row row) {
+    return new JsonObject()
+        .put("globalId", row.getUUID("id"))
+        .put("localId", row.getString("local_id"))
+        .put("sourceId", row.getUUID("source_id"))
+        .put("inventoryPayload", row.getJsonObject("inventory_payload"))
+        .put("marcPayload", row.getJsonObject("marc_payload"));
+  }
+
   /**
    * Get shared records.
    * @param ctx routing context
@@ -141,13 +150,25 @@ public class Storage {
     if (sqlWhere != null) {
       from = from + " WHERE " + sqlWhere;
     }
-    return streamResult(ctx, null, from, sqlOrderBy, "items",
-        row -> new JsonObject()
-            .put("globalId", row.getUUID("id"))
-            .put("localId", row.getString("local_id"))
-            .put("sourceId", row.getUUID("source_id"))
-            .put("inventoryPayload", row.getJsonObject("inventory_payload"))
-            .put("marcPayload", row.getJsonObject("marc_payload")));
+    return streamResult(ctx, null, from, sqlOrderBy, "items", row -> getSharedRecordObject(row));
+  }
+
+  /**
+   * Select shared record given global Id.
+   * @param id global identifier
+   * @return shared record response as JSON object
+   */
+  public Future<JsonObject> selectSharedRecord(String id) {
+    return pool.preparedQuery(
+            "SELECT * FROM " + bibRecordTable + " WHERE id = $1")
+        .execute(Tuple.of(id))
+        .map(res -> {
+          RowIterator<Row> iterator = res.iterator();
+          if (!iterator.hasNext()) {
+            return null;
+          }
+          return getSharedRecordObject(iterator.next());
+        });
   }
 
   /**

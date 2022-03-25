@@ -346,7 +346,7 @@ paths:
           format: uuid
     get:
       description: Get record with global identifier.
-      operationId: getSharedRecordsGlobalId
+      operationId: getSharedRecordGlobalId
       responses:
         "200":
           description: shared index record found.
