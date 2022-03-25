@@ -5,11 +5,15 @@ import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.response.ExtractableResponse;
 import io.restassured.response.Response;
 import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.unit.TestContext;
 import io.vertx.ext.unit.junit.VertxUnitRunner;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.UUID;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -33,25 +37,74 @@ public class MainVerticleTest {
   private final static Logger log = LogManager.getLogger("MainVerticleTest");
 
   static Vertx vertx;
-  static final int MODULE_PORT = 9230;
+  static final int OKAPI_PORT = 9230;
+  static final String OKAPI_URL = "http://localhost:" + OKAPI_PORT;
+  static final int MODULE_PORT = 9231;
+  static final String MODULE_URL = "http://localhost:" + MODULE_PORT;
   static String tenant1 = "tenant1";
 
   @ClassRule
   public static PostgreSQLContainer<?> postgresSQLContainer = TenantPgPoolContainer.create();
 
   @BeforeClass
-  public static void beforeClass(TestContext context) {
+  public static void beforeClass(TestContext context) throws IOException {
     vertx = Vertx.vertx();
     RestAssured.enableLoggingOfRequestAndResponseIfValidationFails();
-    RestAssured.baseURI = "http://localhost:" + MODULE_PORT;
+    RestAssured.baseURI = OKAPI_URL;
     RestAssured.requestSpecification = new RequestSpecBuilder().build();
 
-    DeploymentOptions deploymentOptions = new DeploymentOptions();
-    deploymentOptions.setConfig(new JsonObject().put("port", Integer.toString(MODULE_PORT)));
-    vertx.deployVerticle(new MainVerticle(), deploymentOptions)
-        .onComplete(context.asyncAssertSuccess(res ->
-            tenantOp(context, tenant1, new JsonObject().put("module_to", "mod-shared-index-1.0.0"), null)
-        ));
+    // deploy okapi
+    DeploymentOptions okapiOptions = new DeploymentOptions();
+    okapiOptions.setConfig(new JsonObject().put("port", Integer.toString(OKAPI_PORT)));
+    Future<Void> f = vertx.deployVerticle(new org.folio.okapi.MainVerticle(), okapiOptions).mapEmpty();
+
+    // deploy this module
+    f = f.compose(e -> {
+      DeploymentOptions deploymentOptions = new DeploymentOptions();
+      deploymentOptions.setConfig(new JsonObject().put("port", Integer.toString(MODULE_PORT)));
+      return vertx.deployVerticle(new MainVerticle(), deploymentOptions).mapEmpty();
+    });
+
+    String md = Files.readString(Path.of("../descriptors/ModuleDescriptor-template.json"))
+        .replace("${artifactId}", "mod-shared-index")
+        .replace("${version}", "1.0.0");
+
+    f.onComplete(context.asyncAssertSuccess(res -> {
+      // post the module descriptor
+      RestAssured.given()
+          .header("Content-Type", "application/json")
+          .body(md)
+          .post("/_/proxy/modules")
+          .then().statusCode(201);
+
+      // tell okapi where our module is running
+      RestAssured.given()
+          .header("Content-Type", "application/json")
+          .body(new JsonObject()
+              .put("instId", "mod-shared-index-1.0.0")
+              .put("srvcId", "mod-shared-index-1.0.0")
+              .put("url", MODULE_URL)
+              .encode())
+          .post("/_/discovery/modules")
+          .then().statusCode(201);
+
+      // create tenant
+      RestAssured.given()
+          .header("Content-Type", "application/json")
+          .body(new JsonObject().put("id", tenant1).encode())
+          .post("/_/proxy/tenants")
+          .then().statusCode(201);
+
+      // ane enable module for that tenant
+      RestAssured.given()
+          .header("Content-Type", "application/json")
+          .body(new JsonArray().add(new JsonObject()
+                  .put("id", "mod-shared-index")
+                  .put("action", "enable"))
+              .encode())
+          .post("/_/proxy/tenants/" + tenant1 + "/install")
+          .then().statusCode(200);
+    }));
   }
 
   @AfterClass
@@ -69,6 +122,7 @@ public class MainVerticleTest {
    */
   static void tenantOp(TestContext context, String tenant, JsonObject tenantAttributes, String expectedError) {
     ExtractableResponse<Response> response = RestAssured.given()
+        .baseUri(MODULE_URL)
         .header(XOkapiHeaders.TENANT, tenant)
         .header("Content-Type", "application/json")
         .body(tenantAttributes.encode())
@@ -83,6 +137,7 @@ public class MainVerticleTest {
     context.assertEquals("/_/tenant/" + tenantJob.getString("id"), location);
 
     response = RestAssured.given()
+        .baseUri(MODULE_URL)
         .header(XOkapiHeaders.TENANT, tenant)
         .get(location + "?wait=10000")
         .then().statusCode(200)
@@ -92,6 +147,7 @@ public class MainVerticleTest {
     context.assertEquals(expectedError, response.path("error"));
 
     RestAssured.given()
+        .baseUri(MODULE_URL)
         .header(XOkapiHeaders.TENANT, tenant)
         .delete(location)
         .then().statusCode(204);
@@ -100,6 +156,7 @@ public class MainVerticleTest {
   @Test
   public void testAdminHealth() {
     RestAssured.given()
+        .baseUri(MODULE_URL)
         .get("/admin/health")
         .then().statusCode(200)
         .header("Content-Type", is("text/plain"));
@@ -109,6 +166,7 @@ public class MainVerticleTest {
   public void testGetSharedRecordsUnknownTenant() {
     String tenant = "unknowntenant";
     RestAssured.given()
+        .baseUri(MODULE_URL)
         .header(XOkapiHeaders.TENANT, tenant)
         .get("/shared-index/records")
         .then().statusCode(400)
@@ -142,6 +200,7 @@ public class MainVerticleTest {
         .put("records", records);
 
     RestAssured.given()
+        .baseUri(MODULE_URL)
         .header(XOkapiHeaders.TENANT, tenant)
         .header("Content-Type", "application/json")
         .body(request.encode())
@@ -166,6 +225,7 @@ public class MainVerticleTest {
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, "unknowntenant")
+        .baseUri(MODULE_URL)
         .header("Content-Type", "application/json")
         .body(request.encode())
         .put("/shared-index/records")

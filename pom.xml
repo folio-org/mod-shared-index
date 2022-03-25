@@ -74,6 +74,11 @@
       </dependency>
       <dependency>
         <groupId>org.folio.okapi</groupId>
+        <artifactId>okapi-core</artifactId>
+        <version>4.13.0</version>
+      </dependency>
+      <dependency>
+        <groupId>org.folio.okapi</groupId>
         <artifactId>okapi-testing</artifactId>
         <version>4.13.0</version>
       </dependency>
