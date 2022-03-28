@@ -428,24 +428,19 @@ public class Storage {
               AtomicBoolean first = new AtomicBoolean(true);
               RowStream<Row> stream = pq.createStream(sqlStreamFetchSize);
               stream.handler(row -> {
-                try {
-                  stream.pause();
-                  Future<JsonObject> f = handler.apply(row);
-                  f.onSuccess(response -> {
-                    if (!first.getAndSet(false)) {
-                      ctx.response().write(",");
-                    }
-                    ctx.response().write(copyWithoutNulls(response).encode());
-                    stream.resume();
-                  });
-                  f.onFailure(e -> {
-                    log.info("failure {}", e.getMessage(), e);
-                    stream.resume();
-                  });
-                } catch (Exception e) {
-                  log.error(e.getMessage(), e);
+                stream.pause();
+                Future<JsonObject> f = handler.apply(row);
+                f.onSuccess(response -> {
+                  if (!first.getAndSet(false)) {
+                    ctx.response().write(",");
+                  }
+                  ctx.response().write(copyWithoutNulls(response).encode());
                   stream.resume();
-                }
+                });
+                f.onFailure(e -> {
+                  log.info("failure {}", e.getMessage(), e);
+                  stream.resume();
+                });
               });
               stream.endHandler(end -> sqlConnection.query(cnt).execute()
                   .onSuccess(cntRes -> resultFooter(ctx, cntRes, facets, null))
