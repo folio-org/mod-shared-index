@@ -484,12 +484,12 @@ public class MainVerticleTest {
         .add(new JsonObject()
             .put("localId", "S101")
             .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
-            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("1")))
+            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("1").add("2")))
         )
         .add(new JsonObject()
             .put("localId", "S102")
             .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
-            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("2")))
+            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("3")))
         );
     ingestRecords(records1, sourceId1);
 
@@ -511,7 +511,8 @@ public class MainVerticleTest {
         .contentType("application/json")
         .body("items", hasSize(2))
         .body("items[0].matchkeys.isbn[0]", is("1"))
-        .body("items[1].matchkeys.isbn[0]", is("2"));
+        .body("items[0].matchkeys.isbn[1]", is("2"))
+        .body("items[1].matchkeys.isbn[0]", is("3"));
 
     String sourceId2 = UUID.randomUUID().toString();
     JsonArray records2 = new JsonArray()
