@@ -10,6 +10,8 @@ import io.vertx.ext.web.openapi.RouterBuilder;
 import io.vertx.ext.web.validation.RequestParameter;
 import io.vertx.ext.web.validation.RequestParameters;
 import io.vertx.ext.web.validation.ValidationHandler;
+import java.util.Arrays;
+import java.util.List;
 import java.util.function.Function;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -57,7 +59,23 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     pgCqlQuery.parse(stringOrNull(params.queryParameter("query")));
 
+    String m = stringOrNull(params.queryParameter("matchkeyid"));
     Storage storage = new Storage(ctx);
+    if (m != null) {
+      RequestParameter iterationsParameter = params.queryParameter("maxiterations");
+      Integer maxIterations = iterationsParameter != null ? iterationsParameter.getInteger() : 3;
+      List<String> matchKeyIds = Arrays.asList(m.split(","));
+      return storage.getCluster(pgCqlQuery.getWhereClause(), matchKeyIds, maxIterations)
+          .map(records -> {
+            JsonArray items = new JsonArray();
+            records.forEach((k, v) -> items.add(v));
+            JsonObject result = new JsonObject();
+            result.put("items", items);
+            result.put("totalRecords", records.size());
+            HttpResponse.responseJson(ctx, 200).end(result.encode());
+            return null;
+          });
+    }
     return storage.getSharedRecords(ctx, pgCqlQuery.getWhereClause(),
         pgCqlQuery.getOrderByClause());
   }

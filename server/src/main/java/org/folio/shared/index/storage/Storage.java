@@ -16,7 +16,11 @@ import io.vertx.sqlclient.SqlConnection;
 import io.vertx.sqlclient.Tuple;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -178,6 +182,101 @@ public class Storage {
       from = from + " WHERE " + sqlWhere;
     }
     return streamResult(ctx, null, from, sqlOrderBy, "items", this::handleRecordWithMatchKeys);
+  }
+
+  private Future<Map<UUID, JsonObject>> getCluster2(SqlConnection connection,
+      Map<String, Set<String>> matchKeys, int maxIterations) {
+
+    Map<UUID,JsonObject> records = new HashMap<>();
+    StringBuilder q = new StringBuilder("SELECT * FROM " + bibRecordTable
+        + " INNER JOIN " + matchKeyValueTable
+        + " ON bib_record_id = " + bibRecordTable + ".id WHERE ");
+    int t = 1;
+    List<Object> tupleValues = new ArrayList<>();
+    for (String key : matchKeys.keySet()) {
+      for (String v : matchKeys.get(key)) {
+        if (t > 1) {
+          q.append(" OR ");
+        }
+        q.append("(match_key_config_id = $" + t + " AND match_value = $" + (t + 1) + ")");
+        tupleValues.add(key);
+        tupleValues.add(v);
+        t += 2;
+      }
+    }
+    return connection.preparedQuery(q.toString())
+        .execute(Tuple.from(tupleValues))
+        .compose(res -> {
+          if (res.rowCount() > 50) {
+            return Future.failedFuture("getCluster can not start with more than 50 records");
+          }
+          List<Future> futures = new ArrayList<>();
+          res.forEach(row -> futures.add(handleRecordWithMatchKeys(row)
+              .map(j -> records.put(row.getUUID("id"), j))));
+          return GenericCompositeFuture.all(futures).compose(res1 -> {
+            AtomicBoolean added = new AtomicBoolean();
+            records.forEach((k, v) -> {
+              JsonObject m = v.getJsonObject("matchkeys");
+              m.fieldNames().forEach(f -> {
+                matchKeys.computeIfAbsent(f, x -> new HashSet<>());
+                m.getJsonArray(f).forEach(e -> {
+                  if (matchKeys.get(f).add((String) e)) {
+                    added.set(true);
+                  }
+                });
+              });
+            });
+            if (added.get() && maxIterations > 1) {
+              return getCluster2(connection, matchKeys, maxIterations - 1);
+            }
+            return Future.succeededFuture(records);
+          });
+        });
+  }
+
+  /**
+   * Get cluster from CQL where start and with given match key config IDs in use.
+   * @param sqlWhere SQL where clause for shared records
+   * @param matchKeyIds match key identifications
+   * @param maxIterations for finding related records
+   * @return
+   */
+  public Future<Map<UUID,JsonObject>> getCluster(String sqlWhere, List<String> matchKeyIds,
+      int maxIterations) {
+
+    Map<String, Set<String>> matchKeys = new HashMap<>();
+    String from = bibRecordTable;
+    if (sqlWhere != null) {
+      from = from + " WHERE " + sqlWhere;
+    }
+    String q = "SELECT * FROM " + from;
+    return pool.withConnection(connection ->
+        connection.query(q).execute()
+            .compose(res -> {
+              if (res.rowCount() > 50) {
+                return Future.failedFuture("getCluster can not start with more than 50 records");
+              }
+              List<Future> futures = new ArrayList<>();
+              Map<UUID,JsonObject> records = new HashMap<>();
+              res.forEach(row -> futures.add(handleRecordWithMatchKeys(row)
+                  .map(j -> records.put(row.getUUID("id"), j))));
+              return GenericCompositeFuture.all(futures).compose(res1 -> {
+                records.forEach((k, v) -> {
+                  JsonObject m = v.getJsonObject("matchkeys");
+                  m.fieldNames().forEach(f -> {
+                    if (matchKeyIds.contains(f)) {
+                      matchKeys.computeIfAbsent(f, x -> new HashSet<>());
+                      m.getJsonArray(f).forEach(e -> matchKeys.get(f).add((String) e));
+                    }
+                  });
+                });
+                if (matchKeys.isEmpty()) {
+                  return Future.succeededFuture(records);
+                }
+                return getCluster2(connection, matchKeys, maxIterations);
+              });
+            })
+    );
   }
 
   /**

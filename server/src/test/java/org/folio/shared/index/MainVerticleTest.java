@@ -487,12 +487,12 @@ public class MainVerticleTest {
         .add(new JsonObject()
             .put("localId", "S101")
             .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
-            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("1").add("2")))
+            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("1")))
         )
         .add(new JsonObject()
             .put("localId", "S102")
             .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
-            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("3")))
+            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("2").add("3")))
         );
     ingestRecords(records1, sourceId1);
 
@@ -514,8 +514,8 @@ public class MainVerticleTest {
         .contentType("application/json")
         .body("items", hasSize(2))
         .body("items[0].matchkeys.isbn[0]", is("1"))
-        .body("items[0].matchkeys.isbn[1]", is("2"))
-        .body("items[1].matchkeys.isbn[0]", is("3"));
+        .body("items[1].matchkeys.isbn[0]", is("2"))
+        .body("items[1].matchkeys.isbn[1]", is("3"));
 
     String sourceId2 = UUID.randomUUID().toString();
     JsonArray records2 = new JsonArray()
@@ -532,7 +532,12 @@ public class MainVerticleTest {
         .add(new JsonObject()
             .put("localId", "S203")
             .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
-            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("3")))
+            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("3").add("4")))
+        )
+        .add(new JsonObject()
+            .put("localId", "S204")
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("4")))
         );
     ingestRecords(records2, sourceId2);
 
@@ -544,6 +549,57 @@ public class MainVerticleTest {
         .put("/shared-index/config/matchkeys/" + matchKey.getString("id") + "/initialize")
         .then().statusCode(200)
         .contentType("application/json");
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("matchkeyid", "isbn")
+        .param("query", "localId=S101")
+        .get("/shared-index/records")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(2));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("matchkeyid", "isbn")
+        .param("query", "localId=S101 and sourceId=" + sourceId1)
+        .get("/shared-index/records")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(2));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("matchkeyid", "isbn")
+        .param("maxiterations", "1")
+        .param("query", "localId=S102 and sourceId=" + sourceId1)
+        .get("/shared-index/records")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(3));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("matchkeyid", "isbn")
+        .param("query", "localId=S102 and sourceId=" + sourceId1)
+        .get("/shared-index/records")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(4));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("matchkeyid", "isbn")
+        .param("query", "localId==notfound")
+        .get("/shared-index/records")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(0));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
