@@ -603,6 +603,16 @@ public class MainVerticleTest {
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("matchkeyid", "notfound")
+        .param("query", "localId=S101 and sourceId=" + sourceId1)
+        .get("/shared-index/records")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(1));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
         .delete("/shared-index/config/matchkeys/" + matchKey.getString("id"))
         .then().statusCode(204);
 
