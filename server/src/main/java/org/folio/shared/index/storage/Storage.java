@@ -228,13 +228,13 @@ public class Storage {
         + " ON bib_record_id = " + bibRecordTable + ".id WHERE ");
     int t = 1;
     List<Object> tupleValues = new ArrayList<>();
-    for (String key : matchKeys.keySet()) {
-      for (String v : matchKeys.get(key)) {
+    for (Map.Entry<String,Set<String>> entry : matchKeys.entrySet()) {
+      for (String v : entry.getValue()) {
         if (t > 1) {
           q.append(" OR ");
         }
         q.append("(match_key_config_id = $" + t + " AND match_value = $" + (t + 1) + ")");
-        tupleValues.add(key);
+        tupleValues.add(entry.getKey());
         tupleValues.add(v);
         t += 2;
       }
