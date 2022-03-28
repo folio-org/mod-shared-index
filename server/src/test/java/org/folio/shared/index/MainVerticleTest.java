@@ -1,6 +1,5 @@
 package org.folio.shared.index;
 
-import com.github.dockerjava.zerodep.shaded.org.apache.commons.codec.net.PercentCodec;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.config.HttpClientConfig;
@@ -191,7 +190,8 @@ public class MainVerticleTest {
   public void testGetSharedRecordsBadCqlField() {
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
-        .get("/shared-index/records?query=foo=bar")
+        .param("query","foo=bar" )
+        .get("/shared-index/records")
         .then().statusCode(400)
         .header("Content-Type", is("text/plain"))
         .body(is("Unsupported CQL index: foo"));
@@ -403,7 +403,8 @@ public class MainVerticleTest {
     String res = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
-        .get("/shared-index/records?query=sourceId==" + sourceId)
+        .param("query", "sourceId==" + sourceId)
+        .get("/shared-index/records")
         .then().statusCode(200)
         .body("items", hasSize(2))
         .body("items[0].sourceId", is(sourceId))
@@ -429,7 +430,8 @@ public class MainVerticleTest {
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
-        .get("/shared-index/records?query=sourceId==" + UUID.randomUUID())
+        .param("query", "sourceId==" + UUID.randomUUID())
+        .get("/shared-index/records")
         .then().statusCode(200)
         .body("items", hasSize(0))
         .body("resultInfo.totalRecords", is(0));
@@ -439,7 +441,8 @@ public class MainVerticleTest {
       RestAssured.given()
           .header(XOkapiHeaders.TENANT, tenant1)
           .header("Content-Type", "application/json")
-          .get("/shared-index/records?query=localId==" + sharedRecord.getString("localId"))
+          .param("query", "localId==" + sharedRecord.getString("localId"))
+          .get("/shared-index/records")
           .then().statusCode(200)
           .body("items", hasSize(1))
           .body("items[0].localId", is(sharedRecord.getString("localId")))
