@@ -97,7 +97,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     String id = stringOrNull(params.pathParameter("id"));
     Storage storage = new Storage(ctx);
-    return storage.selectMatchKey(id).onSuccess(res -> {
+    return storage.selectMatchKeyConfig(id).onSuccess(res -> {
       if (res == null) {
         HttpResponse.responseError(ctx, 404, "MatchKey " + id + " not found");
         return;
@@ -110,7 +110,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     String id = stringOrNull(params.pathParameter("id"));
     Storage storage = new Storage(ctx);
-    return storage.deleteMatchKey(id).onSuccess(res -> {
+    return storage.deleteMatchKeyConfig(id).onSuccess(res -> {
       if (Boolean.FALSE.equals(res)) {
         HttpResponse.responseError(ctx, 404, "MatchKey " + id + " not found");
         return;
@@ -133,7 +133,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     pgCqlQuery.parse(stringOrNull(params.queryParameter("query")));
 
     Storage storage = new Storage(ctx);
-    return storage.getMatchKeys(ctx, pgCqlQuery.getWhereClause(),
+    return storage.getMatchKeyConfigs(ctx, pgCqlQuery.getWhereClause(),
         pgCqlQuery.getOrderByClause());
   }
 
@@ -141,7 +141,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     String id = stringOrNull(params.pathParameter("id"));
     Storage storage = new Storage(ctx);
-    return storage.initializeMatchKey(id, 2)
+    return storage.initializeMatchKey(id)
         .onSuccess(res -> {
           if (res == null) {
             HttpResponse.responseError(ctx, 404, "MatchKey " + id + " not found");

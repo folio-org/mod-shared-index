@@ -1,5 +1,6 @@
 package org.folio.shared.index;
 
+import com.github.dockerjava.zerodep.shaded.org.apache.commons.codec.net.PercentCodec;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.config.HttpClientConfig;
@@ -464,6 +465,20 @@ public class MainVerticleTest {
 
   @Test
   public void testMatchKeys() {
+    JsonObject matchKey = new JsonObject()
+        .put("id", "isbn")
+        .put("method", "jsonpath")
+        .put("params", new JsonObject().put("inventory", "$.isbn[*]"));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey.encode())
+        .post("/shared-index/config/matchkeys")
+        .then().statusCode(201)
+        .contentType("application/json")
+        .body(Matchers.is(matchKey.encode()));
+
     String sourceId1 = UUID.randomUUID().toString();
     JsonArray records1 = new JsonArray()
         .add(new JsonObject()
@@ -476,8 +491,28 @@ public class MainVerticleTest {
             .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
             .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("2")))
         );
-
     ingestRecords(records1, sourceId1);
+
+    // populate first time
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey.encode())
+        .put("/shared-index/config/matchkeys/" + matchKey.getString("id") + "/initialize")
+        .then().statusCode(200)
+        .contentType("application/json");
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("query", "sourceId==\"" + sourceId1 + "\"")
+        .get("/shared-index/records")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(2))
+        .body("items[0].matchkeys.isbn[0]", is("1"))
+        .body("items[1].matchkeys.isbn[0]", is("2"));
+
     String sourceId2 = UUID.randomUUID().toString();
     JsonArray records2 = new JsonArray()
         .add(new JsonObject()
@@ -497,30 +532,7 @@ public class MainVerticleTest {
         );
     ingestRecords(records2, sourceId2);
 
-    JsonObject matchKey = new JsonObject()
-        .put("id", "isbn")
-        .put("method", "jsonpath")
-        .put("params", new JsonObject().put("inventory", "$.isbn[*]"));
-
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant1)
-        .header("Content-Type", "application/json")
-        .body(matchKey.encode())
-        .post("/shared-index/config/matchkeys")
-        .then().statusCode(201)
-        .contentType("application/json")
-        .body(Matchers.is(matchKey.encode()));
-
-    // populate first time
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant1)
-        .header("Content-Type", "application/json")
-        .body(matchKey.encode())
-        .put("/shared-index/config/matchkeys/" + matchKey.getString("id") + "/initialize")
-        .then().statusCode(200)
-        .contentType("application/json");
-
-    // populate again (to check it's reset and we avoid hitting constraints)
+    // populate again with both sources
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
@@ -533,6 +545,11 @@ public class MainVerticleTest {
         .header(XOkapiHeaders.TENANT, tenant1)
         .delete("/shared-index/config/matchkeys/" + matchKey.getString("id"))
         .then().statusCode(204);
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .delete("/shared-index/config/matchkeys/" + matchKey.getString("id"))
+        .then().statusCode(404);
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)

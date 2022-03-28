@@ -14,6 +14,7 @@ import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.RowStream;
 import io.vertx.sqlclient.SqlConnection;
 import io.vertx.sqlclient.Tuple;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -22,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.folio.okapi.common.GenericCompositeFuture;
 import org.folio.shared.index.matchkey.MatchKeyMethod;
 import org.folio.tlib.postgres.TenantPgPool;
 import org.folio.tlib.util.TenantUtil;
@@ -37,6 +39,7 @@ public class Storage {
   String matchKeyConfigTable;
   String matchKeyValueTable;
   String itemView;
+  static int sqlStreamFetchSize = 50;
 
   /**
    * Create storage service for tenant.
@@ -132,13 +135,34 @@ public class Storage {
     });
   }
 
-  static JsonObject getSharedRecordObject(Row row) {
-    return new JsonObject()
+  static Future<JsonObject> handleRecord(Row row) {
+    return Future.succeededFuture(new JsonObject()
         .put("globalId", row.getUUID("id"))
         .put("localId", row.getString("local_id"))
         .put("sourceId", row.getUUID("source_id"))
         .put("inventoryPayload", row.getJsonObject("inventory_payload"))
-        .put("marcPayload", row.getJsonObject("marc_payload"));
+        .put("marcPayload", row.getJsonObject("marc_payload")));
+  }
+
+  Future<JsonObject> handleRecordWithMatchKeys(Row row) {
+    return handleRecord(row).compose(o ->
+        pool.preparedQuery("SELECT * FROM " + matchKeyValueTable
+                + " WHERE bib_record_id = $1")
+            .execute(Tuple.of(row.getUUID("id")))
+            .map(res ->  {
+              JsonObject matchKeys = new JsonObject();
+              res.forEach(x -> {
+                String matchKeyConfig = x.getString("match_key_config_id");
+                JsonArray ar = matchKeys.getJsonArray(matchKeyConfig);
+                if (ar == null) {
+                  ar = new JsonArray();
+                  matchKeys.put(matchKeyConfig, ar);
+                }
+                ar.add(x.getString("match_value"));
+              });
+              o.put("matchkeys", matchKeys);
+              return o;
+            }));
   }
 
   /**
@@ -153,7 +177,7 @@ public class Storage {
     if (sqlWhere != null) {
       from = from + " WHERE " + sqlWhere;
     }
-    return streamResult(ctx, null, from, sqlOrderBy, "items", Storage::getSharedRecordObject);
+    return streamResult(ctx, null, from, sqlOrderBy, "items", this::handleRecordWithMatchKeys);
   }
 
   /**
@@ -165,12 +189,12 @@ public class Storage {
     return pool.preparedQuery(
             "SELECT * FROM " + bibRecordTable + " WHERE id = $1")
         .execute(Tuple.of(id))
-        .map(res -> {
+        .compose(res -> {
           RowIterator<Row> iterator = res.iterator();
           if (!iterator.hasNext()) {
-            return null;
+            return Future.succeededFuture(null);
           }
-          return getSharedRecordObject(iterator.next());
+          return handleRecord(iterator.next());
         });
   }
 
@@ -193,7 +217,7 @@ public class Storage {
    * @param id match key id (user specified)
    * @return JSON object if found; null if not found
    */
-  public Future<JsonObject> selectMatchKey(String id) {
+  public Future<JsonObject> selectMatchKeyConfig(String id) {
     return pool.preparedQuery(
             "SELECT * FROM " + matchKeyConfigTable + " WHERE id = $1")
         .execute(Tuple.of(id))
@@ -215,11 +239,21 @@ public class Storage {
    * @param id match key identifier
    * @return TRUE if deleted; FALSE if not found
    */
-  public Future<Boolean> deleteMatchKey(String id) {
-    return pool.preparedQuery(
-            "DELETE FROM " + matchKeyConfigTable + " WHERE id = $1")
-        .execute(Tuple.of(id))
-        .map(res -> res.rowCount() > 0);
+  public Future<Boolean> deleteMatchKeyConfig(String id) {
+    return pool.getConnection()
+        .compose(connection ->
+          connection.preparedQuery(
+                  "DELETE FROM " + matchKeyConfigTable + " WHERE id = $1")
+              .execute(Tuple.of(id))
+              .compose(res -> {
+                if (res.rowCount() == 0) {
+                  return Future.succeededFuture(false);
+                }
+                return cleanMatchKeyValueTable(connection, id)
+                    .map(x -> Boolean.TRUE);
+              })
+              .eventually(x -> connection.close())
+        );
   }
 
   /**
@@ -229,51 +263,58 @@ public class Storage {
    * @param sqlOrderBy SQL order by clause
    * @return async result
    */
-  public Future<Void> getMatchKeys(RoutingContext ctx, String sqlWhere, String sqlOrderBy) {
+  public Future<Void> getMatchKeyConfigs(RoutingContext ctx, String sqlWhere, String sqlOrderBy) {
     String from = matchKeyConfigTable;
     if (sqlWhere != null) {
       from = from + " WHERE " + sqlWhere;
     }
     return streamResult(ctx, null, from, sqlOrderBy, "matchKeys",
-        row -> new JsonObject()
+        row -> Future.succeededFuture(new JsonObject()
             .put("id", row.getString("id"))
             .put("method", row.getString("method"))
-            .put("params", row.getJsonObject("params")));
+            .put("params", row.getJsonObject("params"))));
   }
 
-  Future<Void> cleanMatchKeyTable(SqlConnection connection, String matchKeyMethodId) {
+  Future<Void> cleanMatchKeyValueTable(SqlConnection connection, String matchKeyMethodId) {
     return connection.preparedQuery("DELETE FROM " + matchKeyValueTable
         + " WHERE match_key_config_id = $1").execute(
         Tuple.of(matchKeyMethodId)).mapEmpty();
   }
 
-  Future<Void> upsertMatchKeyTable(SqlConnection connection, String matchKeyMethodId, UUID globalId,
-      String key) {
+  Future<Void> upsertMatchKeyValueTable(SqlConnection connection, String matchKeyMethodId,
+      UUID globalId, String key) {
     return connection.preparedQuery("INSERT INTO " + matchKeyValueTable
         + " (bib_record_id, match_key_config_id, match_value)"
-        + " VALUES ($1, $2, $3)").execute(
+        + " VALUES ($1, $2, $3)")
+        .execute(
         Tuple.of(globalId, matchKeyMethodId, key)).mapEmpty();
   }
 
-  Future<JsonObject> recalculateMatchKey(SqlConnection connection, MatchKeyMethod method,
-      String matchKeyMethodId, int fetchSize) {
+  Future<JsonObject> recalculateMatchKeyValueTable(SqlConnection connection, MatchKeyMethod method,
+      String matchKeyMethodId) {
 
     String query = "SELECT * FROM " + bibRecordTable;
     AtomicInteger count = new AtomicInteger();
-    return cleanMatchKeyTable(connection, matchKeyMethodId)
+    return cleanMatchKeyValueTable(connection, matchKeyMethodId)
         .compose(x -> connection.prepare(query).compose(pq ->
             connection.begin().compose(tx -> {
-              RowStream<Row> stream = pq.createStream(fetchSize);
+              RowStream<Row> stream = pq.createStream(sqlStreamFetchSize);
               Promise<JsonObject> promise = Promise.promise();
               stream.handler(row -> {
+                stream.pause();
                 count.incrementAndGet();
                 List<String> keys =
                     method.getKeys(row.getJsonObject("marc_payload"),
                         row.getJsonObject("inventory_payload"));
+                List<Future<Void>> futures = new ArrayList<>();
+                UUID globalId = row.getUUID("id");
                 for (String key : keys) {
-                  upsertMatchKeyTable(connection, matchKeyMethodId, row.getUUID("id"), key)
-                      .onFailure(u -> log.error(u.getMessage(), u));
+                  futures.add(upsertMatchKeyValueTable(connection, matchKeyMethodId,
+                      globalId, key));
                 }
+                GenericCompositeFuture.all(futures)
+                    .onFailure(e -> log.error(e.getMessage(), e))
+                    .onComplete(e -> stream.resume());
               });
               stream.endHandler(end -> {
                 tx.commit();
@@ -292,10 +333,9 @@ public class Storage {
   /**
    * Initialize match key (populate clusters).
    * @param id match key id (user specified)
-   * @param fetchSize for stream fetch
    * @return statistics
    */
-  public Future<JsonObject> initializeMatchKey(String id, int fetchSize) {
+  public Future<JsonObject> initializeMatchKey(String id) {
     return pool.getConnection()
         .compose(connection ->
             connection.preparedQuery(
@@ -314,7 +354,7 @@ public class Storage {
                     return Future.failedFuture("Unknown match key method: " + method);
                   }
                   matchKeyMethod.configure(params);
-                  return recalculateMatchKey(connection, matchKeyMethod, id, fetchSize);
+                  return recalculateMatchKeyValueTable(connection, matchKeyMethod, id);
                 })
                 .eventually(x -> connection.close())
         );
@@ -377,7 +417,7 @@ public class Storage {
 
   Future<Void> streamResult(RoutingContext ctx, SqlConnection sqlConnection,
       String query, String cnt, String property, List<String[]> facets,
-      Function<Row, JsonObject> handler) {
+      Function<Row, Future<JsonObject>> handler) {
 
     return sqlConnection.prepare(query)
         .compose(pq ->
@@ -386,13 +426,26 @@ public class Storage {
               ctx.response().putHeader("Content-Type", "application/json");
               ctx.response().write("{ \"" + property + "\" : [");
               AtomicBoolean first = new AtomicBoolean(true);
-              RowStream<Row> stream = pq.createStream(50);
+              RowStream<Row> stream = pq.createStream(sqlStreamFetchSize);
               stream.handler(row -> {
-                if (!first.getAndSet(false)) {
-                  ctx.response().write(",");
+                try {
+                  stream.pause();
+                  Future<JsonObject> f = handler.apply(row);
+                  f.onSuccess(response -> {
+                    if (!first.getAndSet(false)) {
+                      ctx.response().write(",");
+                    }
+                    ctx.response().write(copyWithoutNulls(response).encode());
+                    stream.resume();
+                  });
+                  f.onFailure(e -> {
+                    log.info("failure {}", e.getMessage(), e);
+                    stream.resume();
+                  });
+                } catch (Exception e) {
+                  log.error(e.getMessage(), e);
+                  stream.resume();
                 }
-                JsonObject response = handler.apply(row);
-                ctx.response().write(copyWithoutNulls(response).encode());
               });
               stream.endHandler(end -> sqlConnection.query(cnt).execute()
                   .onSuccess(cntRes -> resultFooter(ctx, cntRes, facets, null))
@@ -411,9 +464,8 @@ public class Storage {
         );
   }
 
-  Future<Void> streamResult(
-      RoutingContext ctx, String distinct,
-      String from, String orderByClause, String property, Function<Row, JsonObject> handler) {
+  Future<Void> streamResult(RoutingContext ctx, String distinct, String from, String orderByClause,
+      String property, Function<Row, Future<JsonObject>> handler) {
 
     return streamResult(ctx, distinct, distinct, List.of(from), Collections.emptyList(),
         orderByClause, property, handler);
@@ -422,7 +474,7 @@ public class Storage {
   @java.lang.SuppressWarnings({"squid:S107"})  // too many arguments
   Future<Void> streamResult(RoutingContext ctx, String distinctMain, String distinctCount,
       List<String> fromList, List<String[]> facets, String orderByClause,
-      String property, Function<Row, JsonObject> handler) {
+      String property, Function<Row, Future<JsonObject>> handler) {
 
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     Integer offset = params.queryParameter("offset").getInteger();
