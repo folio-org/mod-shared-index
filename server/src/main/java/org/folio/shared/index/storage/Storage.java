@@ -129,13 +129,13 @@ public class Storage {
   public Future<Void> upsertSharedRecords(JsonObject request) {
     UUID sourceId = UUID.fromString(request.getString("sourceId"));
     JsonArray records = request.getJsonArray("records");
-    return pool.getConnection().compose(conn -> {
+    return pool.withConnection(conn -> {
       Future<Void> future = Future.succeededFuture();
       for (int i = 0; i < records.size(); i++) {
         JsonObject sharedRecord = records.getJsonObject(i);
         future = future.compose(x -> upsertSharedRecord(conn, sourceId, sharedRecord));
       }
-      return future.eventually(y -> conn.close());
+      return future;
     });
   }
 
@@ -328,20 +328,18 @@ public class Storage {
    * @return TRUE if deleted; FALSE if not found
    */
   public Future<Boolean> deleteMatchKeyConfig(String id) {
-    return pool.getConnection()
-        .compose(connection ->
-          connection.preparedQuery(
-                  "DELETE FROM " + matchKeyConfigTable + " WHERE id = $1")
-              .execute(Tuple.of(id))
-              .compose(res -> {
-                if (res.rowCount() == 0) {
-                  return Future.succeededFuture(false);
-                }
-                return cleanMatchKeyValueTable(connection, id)
-                    .map(x -> Boolean.TRUE);
-              })
-              .eventually(x -> connection.close())
-        );
+    return pool.withConnection(connection ->
+        connection.preparedQuery(
+                "DELETE FROM " + matchKeyConfigTable + " WHERE id = $1")
+            .execute(Tuple.of(id))
+            .compose(res -> {
+              if (res.rowCount() == 0) {
+                return Future.succeededFuture(false);
+              }
+              return cleanMatchKeyValueTable(connection, id)
+                  .map(x -> Boolean.TRUE);
+            })
+    );
   }
 
   /**
@@ -424,28 +422,26 @@ public class Storage {
    * @return statistics
    */
   public Future<JsonObject> initializeMatchKey(String id) {
-    return pool.getConnection()
-        .compose(connection ->
-            connection.preparedQuery(
-                    "SELECT * FROM " + matchKeyConfigTable + " WHERE id = $1")
-                .execute(Tuple.of(id))
-                .compose(res -> {
-                  RowIterator<Row> iterator = res.iterator();
-                  if (!iterator.hasNext()) {
-                    return Future.succeededFuture();
-                  }
-                  Row row = iterator.next();
-                  String method = row.getString("method");
-                  JsonObject params = row.getJsonObject("params");
-                  MatchKeyMethod matchKeyMethod = MatchKeyMethod.get(method);
-                  if (matchKeyMethod == null) {
-                    return Future.failedFuture("Unknown match key method: " + method);
-                  }
-                  matchKeyMethod.configure(params);
-                  return recalculateMatchKeyValueTable(connection, matchKeyMethod, id);
-                })
-                .eventually(x -> connection.close())
-        );
+    return pool.withConnection(connection ->
+        connection.preparedQuery(
+                "SELECT * FROM " + matchKeyConfigTable + " WHERE id = $1")
+            .execute(Tuple.of(id))
+            .compose(res -> {
+              RowIterator<Row> iterator = res.iterator();
+              if (!iterator.hasNext()) {
+                return Future.succeededFuture();
+              }
+              Row row = iterator.next();
+              String method = row.getString("method");
+              JsonObject params = row.getJsonObject("params");
+              MatchKeyMethod matchKeyMethod = MatchKeyMethod.get(method);
+              if (matchKeyMethod == null) {
+                return Future.failedFuture("Unknown match key method: " + method);
+              }
+              matchKeyMethod.configure(params);
+              return recalculateMatchKeyValueTable(connection, matchKeyMethod, id);
+            })
+    );
   }
 
   private static JsonObject copyWithoutNulls(JsonObject obj) {
