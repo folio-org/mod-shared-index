@@ -172,8 +172,8 @@ public class Storage {
   /**
    * Get shared records.
    * @param ctx routing context
-   * @param sqlWhere SQL where caluse
-   * @param sqlOrderBy SQL order by clause
+   * @param sqlWhere SQL WHERE clause
+   * @param sqlOrderBy the SQL ORDER BY clause
    * @return async result
    */
   public Future<Void> getSharedRecords(RoutingContext ctx, String sqlWhere, String sqlOrderBy) {
@@ -249,7 +249,7 @@ public class Storage {
    * @param sqlWhere SQL where clause for shared records
    * @param matchKeyIds match key identifications
    * @param maxIterations for finding related records
-   * @return
+   * @return map of shared records
    */
   public Future<Map<UUID,JsonObject>> getCluster(String sqlWhere, List<String> matchKeyIds,
       int maxIterations) {
@@ -269,7 +269,7 @@ public class Storage {
   }
 
   /**
-   * Select shared record given global Id.
+   * Select shared record given global identifier.
    * @param id global identifier
    * @return shared record response as JSON object
    */
@@ -345,8 +345,8 @@ public class Storage {
   /**
    * Get match keys.
    * @param ctx routing context
-   * @param sqlWhere SQL where caluse
-   * @param sqlOrderBy SQL order by clause
+   * @param sqlWhere the SQL WHERE clause
+   * @param sqlOrderBy the SQL ORDER BY clause
    * @return async result
    */
   public Future<Void> getMatchKeyConfigs(RoutingContext ctx, String sqlWhere, String sqlOrderBy) {
