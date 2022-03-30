@@ -63,10 +63,14 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     return pgCqlQuery;
   }
 
+  static String getQueryParameter(RequestParameters params) {
+    return getParameterString(params.queryParameter("query"));
+  }
+
   Future<Void> deleteSharedRecords(RoutingContext ctx) {
     PgCqlQuery pgCqlQuery = getPqCqlQueryForRecords();
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
-    String query = getParameterString(params.queryParameter("query"));
+    String query = getQueryParameter(params);
     if (query == null) {
       failHandler(400, ctx, "Must specify query for delete records");
       return Future.succeededFuture();
@@ -80,7 +84,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
   Future<Void> getSharedRecords(RoutingContext ctx) {
     PgCqlQuery pgCqlQuery = getPqCqlQueryForRecords();
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
-    pgCqlQuery.parse(getParameterString(params.queryParameter("query")));
+    pgCqlQuery.parse(getQueryParameter(params));
     String m = getParameterString(params.queryParameter("matchkeyid"));
     Storage storage = new Storage(ctx);
     if (m != null) {
@@ -171,7 +175,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
         new PgCqlField("method", PgCqlField.Type.TEXT));
 
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
-    pgCqlQuery.parse(getParameterString(params.queryParameter("query")));
+    pgCqlQuery.parse(getQueryParameter(params));
 
     Storage storage = new Storage(ctx);
     return storage.getMatchKeyConfigs(ctx, pgCqlQuery.getWhereClause(),
