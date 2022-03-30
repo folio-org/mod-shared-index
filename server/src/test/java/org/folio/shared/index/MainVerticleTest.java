@@ -526,15 +526,14 @@ public class MainVerticleTest {
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
-        .delete("/shared-index/config/matchkeys/" + matchKey.getString("id"))
-        .then().statusCode(204);
-
-    // fails due to constraint unless the delete before is performed
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
         .param("query", "cql.allRecords=true")
         .delete("/shared-index/records")
+        .then().statusCode(204);
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .delete("/shared-index/config/matchkeys/" + matchKey.getString("id"))
         .then().statusCode(204);
   }
 

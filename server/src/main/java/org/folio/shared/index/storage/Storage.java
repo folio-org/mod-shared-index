@@ -88,7 +88,8 @@ public class Storage {
                 + " match_key_config_id VARCHAR NOT NULL,"
                 + " match_value VARCHAR NOT NULL,"
                 + " CONSTRAINT match_key_value_fk_bib_record FOREIGN KEY "
-                + "                (bib_record_id) REFERENCES " + bibRecordTable + ")",
+                + "    (bib_record_id) REFERENCES " + bibRecordTable + " ON DELETE CASCADE"
+                + ")",
             "CREATE UNIQUE INDEX IF NOT EXISTS match_key_value_idx ON " + matchKeyValueTable
                 + " (match_key_config_id, match_value, bib_record_id)",
             "CREATE INDEX IF NOT EXISTS match_key_value_bib_id_idX ON " + matchKeyValueTable
@@ -237,9 +238,7 @@ public class Storage {
   }
 
   /**
-   * Delete shared records.
-   *
-   * <p>Does not yet delete entries from match value table.
+   * Delete shared records and corresponding match value table entries.
    * @param sqlWhere SQL WHERE clause
    * @return async result
    */
