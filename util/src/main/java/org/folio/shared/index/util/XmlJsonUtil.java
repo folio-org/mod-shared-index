@@ -156,6 +156,7 @@ public class XmlJsonUtil {
       if (event == XMLStreamConstants.START_ELEMENT) {
         Object o = xmlToJsonObject(depth + 1, xmlStreamReader, skip, event, true);
         // Always returns JsonObject for start element and arrayNode = true
+        assert o instanceof JsonObject;
         JsonObject jsonObject = (JsonObject) o;
         Iterator<String> iterator = jsonObject.fieldNames().iterator();
         // take content of "i" elemenet
