@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.util.Iterator;
 import java.util.List;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -154,7 +155,13 @@ public class XmlJsonUtil {
       int event = next(xmlStreamReader);
       if (event == XMLStreamConstants.START_ELEMENT) {
         Object o = xmlToJsonObject(depth + 1, xmlStreamReader, skip, event, true);
-        ar.add(o);
+        // Always returns JsonObject for start element and arrayNode = true
+        JsonObject jsonObject = (JsonObject) o;
+        Iterator<String> iterator = jsonObject.fieldNames().iterator();
+        // take content of "i" elemenet
+        if (iterator.hasNext()) {
+          ar.add(jsonObject.getValue(iterator.next()));
+        }
       } else if (event != XMLStreamConstants.CHARACTERS) {
         break;
       }
@@ -185,7 +192,7 @@ public class XmlJsonUtil {
     while (true) {
       if (event == XMLStreamConstants.START_ELEMENT) {
         String localName = xmlStreamReader.getLocalName();
-        if ("arr".equals(localName)) {
+        if (!arrayNode && "arr".equals(localName)) {
           ar = xmlToJsonArray(depth, xmlStreamReader, skip);
         } else if (skip.equals(localName)) {
           xmlToJsonSkip(xmlStreamReader, event);
@@ -213,8 +220,10 @@ public class XmlJsonUtil {
       return ar;
     } else if (o != null) {
       return o;
+    } else if (text != null) {
+      return text.toString();
     } else {
-      return text;
+      return null;
     }
   }
 
