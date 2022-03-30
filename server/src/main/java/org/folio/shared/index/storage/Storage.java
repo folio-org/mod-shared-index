@@ -245,7 +245,6 @@ public class Storage {
    */
   public Future<Void> deleteSharedRecords(String sqlWhere) {
     String from = bibRecordTable;
-
     if (sqlWhere != null) {
       from = from + " WHERE " + sqlWhere;
     }
