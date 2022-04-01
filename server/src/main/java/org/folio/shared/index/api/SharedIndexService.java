@@ -91,6 +91,9 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
       int maxIterations = getParameterInteger(
           params.queryParameter("maxiterations"), MATCH_MAX_ITERATIONS);
       List<String> matchKeyIds = Arrays.asList(m.split(","));
+      if (pgCqlQuery.getWhereClause() == null) {
+        return storage.getAllClusters(ctx, matchKeyIds);
+      }
       return storage.getCluster(pgCqlQuery.getWhereClause(), matchKeyIds, maxIterations)
           .map(records -> {
             JsonArray items = new JsonArray();

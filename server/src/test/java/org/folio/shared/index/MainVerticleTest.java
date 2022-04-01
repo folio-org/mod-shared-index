@@ -608,12 +608,12 @@ public class MainVerticleTest {
     JsonArray records1 = new JsonArray()
         .add(new JsonObject()
             .put("localId", "S101")
-            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  0101   450 "))
             .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("1")))
         )
         .add(new JsonObject()
             .put("localId", "S102")
-            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  0102   450 "))
             .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("2").add("3")))
         );
     ingestRecords(records1, sourceId1);
@@ -639,26 +639,34 @@ public class MainVerticleTest {
         .body("items[1].matchkeys.isbn[0]", is("2"))
         .body("items[1].matchkeys.isbn[1]", is("3"));
 
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("matchkeyid", "isbn")
+        .get("/shared-index/records")
+        .then().statusCode(200)
+        .contentType("application/json");
+
     String sourceId2 = UUID.randomUUID().toString();
     JsonArray records2 = new JsonArray()
         .add(new JsonObject()
             .put("localId", "S201")
-            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  0201   450 "))
             .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("1")))
         )
         .add(new JsonObject()
             .put("localId", "S202")
-            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  0202   450 "))
             .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("2")))
         )
         .add(new JsonObject()
             .put("localId", "S203")
-            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  0203   450 "))
             .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("3").add("4")))
         )
         .add(new JsonObject()
             .put("localId", "S204")
-            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  0204   450 "))
             .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("4")))
         );
     ingestRecords(records2, sourceId2);
@@ -669,6 +677,14 @@ public class MainVerticleTest {
         .header("Content-Type", "application/json")
         .body(matchKey.encode())
         .put("/shared-index/config/matchkeys/" + matchKey.getString("id") + "/initialize")
+        .then().statusCode(200)
+        .contentType("application/json");
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("matchkeyid", "isbn")
+        .get("/shared-index/records")
         .then().statusCode(200)
         .contentType("application/json");
 
