@@ -254,8 +254,7 @@ public class Storage {
     StringBuilder setClause = new StringBuilder(" SET cluster_id = $1 WHERE ");
     List<UUID> tupleList = new ArrayList<>();
     tupleList.add(clusterId); // $1
-    int no = 2; // $2, $3, ..
-    while (iterator.hasNext()) {
+    for (int no = 2; iterator.hasNext(); no++) {
       tupleList.add(iterator.next());
       if (no > 2) {
         setClause.append(" AND ");
