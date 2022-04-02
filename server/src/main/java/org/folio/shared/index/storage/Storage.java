@@ -484,7 +484,6 @@ public class Storage {
               response.write("{ \"items\" : [\n");
               AtomicInteger cnt = new AtomicInteger();
               stream.handler(row -> {
-                // cnt.incrementAndGet();
                 if (cnt.incrementAndGet() > 1) {
                   response.write(",\n");
                 }
