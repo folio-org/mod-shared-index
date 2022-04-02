@@ -453,28 +453,24 @@ public class Storage {
             + " WHERE cluster_id = $1")
         .execute(Tuple.of(clusterId))
         .map(rowSet -> {
-          RowIterator<Row> iterator = rowSet.iterator();
-          if (!iterator.hasNext()) {
-            return null;
-          }
-          // just take the first for now..
-          return handleRecord(iterator.next());
+          JsonArray records = new JsonArray();
+          JsonObject cluster = new JsonObject()
+              .put("clusterId", clusterId.toString())
+              .put("records", records);
+          rowSet.forEach(row -> records.add(handleRecord(row)));
+          return cluster;
         });
   }
 
   /**
    * return all clusters as streaming result.
    * @param ctx routing context
-   * @param matchKeyIds match keys to use
+   * @param matchKeyConfigId match ke config to use
    * @return async result
    */
-  public Future<Void> getAllClusters(RoutingContext ctx, List<String> matchKeyIds) {
-    log.info("AD: getAllClusters");
-    if (matchKeyIds.size() != 1) {
-      return Future.failedFuture("Exactly one matchKeyId must be given");
-    }
+  public Future<Void> getAllClusters(RoutingContext ctx, String matchKeyConfigId) {
     String q = "SELECT DISTINCT ON(cluster_id) cluster_id FROM " + clusterValueTable
-        + " WHERE match_key_config_id = '" + matchKeyIds.get(0) + "'";
+        + " WHERE match_key_config_id = '" + matchKeyConfigId + "'";
 
     return pool.getConnection().compose(connection ->
         connection.prepare(q)
@@ -488,24 +484,21 @@ public class Storage {
               response.write("{ \"items\" : [\n");
               AtomicInteger cnt = new AtomicInteger();
               stream.handler(row -> {
-                if (cnt.incrementAndGet() < 100) {
-                  if (cnt.get() > 1) {
-                    response.write(",\n");
-                  }
-                  UUID clusterId = row.getUUID("cluster_id");
-                  log.info("cluster_id = {} row = {}", clusterId, row.deepToString());
-                  stream.pause();
-                  getClusterById(connection, clusterId)
-                      .onFailure(e -> {
-                        log.error(e.getMessage(), e);
-                        stream.close();
-                      })
-                      .onSuccess(obj -> {
-                        response.write(obj.encodePrettily());
-                        log.info("REC : {}", obj.encodePrettily());
-                        stream.resume();
-                      });
+                // cnt.incrementAndGet();
+                if (cnt.incrementAndGet() > 1) {
+                  response.write(",\n");
                 }
+                UUID clusterId = row.getUUID("cluster_id");
+                stream.pause();
+                getClusterById(connection, clusterId)
+                    .onFailure(e -> {
+                      log.error(e.getMessage(), e);
+                      stream.close();
+                    })
+                    .onSuccess(obj -> {
+                      response.write(obj.encodePrettily());
+                      stream.resume();
+                    });
                 if ((cnt.get() % 1000) == 0) {
                   log.info("cnt = {}", cnt);
                 }

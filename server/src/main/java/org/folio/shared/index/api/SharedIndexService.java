@@ -91,9 +91,6 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
       int maxIterations = getParameterInteger(
           params.queryParameter("maxiterations"), MATCH_MAX_ITERATIONS);
       List<String> matchKeyIds = Arrays.asList(m.split(","));
-      if (pgCqlQuery.getWhereClause() == null) {
-        return storage.getAllClusters(ctx, matchKeyIds);
-      }
       return storage.getCluster(pgCqlQuery.getWhereClause(), matchKeyIds, maxIterations)
           .map(records -> {
             JsonArray items = new JsonArray();
@@ -107,6 +104,16 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     }
     return storage.getSharedRecords(ctx, pgCqlQuery.getWhereClause(),
         pgCqlQuery.getOrderByClause());
+  }
+
+  Future<Void> getClusters(RoutingContext ctx) {
+    PgCqlQuery pgCqlQuery = getPqCqlQueryForRecords();
+    RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
+    pgCqlQuery.parse(getQueryParameter(params));
+    String matchKeyId = getParameterString(params.queryParameter("matchkeyid"));
+    // must also consider query, offset, limit
+    Storage storage = new Storage(ctx);
+    return storage.getAllClusters(ctx, matchKeyId);
   }
 
   Future<Void> getSharedRecordGlobalId(RoutingContext ctx) {
@@ -273,6 +280,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
           add(routerBuilder, "deleteConfigMatchKey", this::deleteConfigMatchKey);
           add(routerBuilder, "getConfigMatchKeys", this::getConfigMatchKeys);
           add(routerBuilder, "initializeMatchKey", this::initializeMatchKey);
+          add(routerBuilder, "getClusters", this::getClusters);
           return routerBuilder.createRouter();
         });
   }
