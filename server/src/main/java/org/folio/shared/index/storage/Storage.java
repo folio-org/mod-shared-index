@@ -453,11 +453,10 @@ public class Storage {
         .execute(Tuple.of(clusterId))
         .map(rowSet -> {
           JsonArray records = new JsonArray();
-          JsonObject cluster = new JsonObject()
+          rowSet.forEach(row -> records.add(handleRecord(row)));
+          return new JsonObject()
               .put("clusterId", clusterId.toString())
               .put("records", records);
-          rowSet.forEach(row -> records.add(handleRecord(row)));
-          return cluster;
         });
   }
 
