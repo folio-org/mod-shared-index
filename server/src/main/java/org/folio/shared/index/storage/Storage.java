@@ -257,7 +257,7 @@ public class Storage {
     for (int no = 2; iterator.hasNext(); no++) {
       tupleList.add(iterator.next());
       if (no > 2) {
-        setClause.append(" AND ");
+        setClause.append(" OR ");
       }
       setClause.append("cluster_id = $");
       setClause.append(no);
