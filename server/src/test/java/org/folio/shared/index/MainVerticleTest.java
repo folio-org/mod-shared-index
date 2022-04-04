@@ -17,8 +17,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -666,6 +664,7 @@ public class MainVerticleTest {
             .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
             .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("2").add("3")))
         );
+    log.info("phase 1: insert two separate");
     ingestRecords(records1, sourceId1);
 
     String s = RestAssured.given()
@@ -681,6 +680,7 @@ public class MainVerticleTest {
         .extract().body().asString();
     testClusterResponse(s, List.of("S101"), List.of("S102"));
 
+    log.info("phase 2: S101 from 1 to 4");
     records1 = new JsonArray()
         .add(new JsonObject()
             .put("localId", "S101")
@@ -696,10 +696,11 @@ public class MainVerticleTest {
         .get("/shared-index/clusters")
         .then().statusCode(200)
         .contentType("application/json")
-        .body("items", hasSize(3))
+        .body("items", hasSize(2))
         .extract().body().asString();
     testClusterResponse(s, List.of("S101"), List.of("S102"));
 
+    log.info("phase 3: S101 from 4 to 3");
     records1 = new JsonArray()
         .add(new JsonObject()
             .put("localId", "S101")
@@ -715,9 +716,14 @@ public class MainVerticleTest {
         .get("/shared-index/clusters")
         .then().statusCode(200)
         .contentType("application/json")
-        .body("items", hasSize(3))
+        .body("items", hasSize(1))
         .extract().body().asString();
     testClusterResponse(s, List.of("S101", "S102"));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .delete("/shared-index/config/matchkeys/" + matchKey.getString("id"))
+        .then().statusCode(204);
   }
 
   @Test
@@ -737,7 +743,6 @@ public class MainVerticleTest {
         .contentType("text/plain")
         .body(is("Must specify query for delete records"));
   }
-
 
   @Test
   public void testMatchKeysManual() {

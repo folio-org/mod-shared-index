@@ -99,17 +99,22 @@ public class Storage {
                 + " (match_key_config_id, match_value, bib_record_id)",
             "CREATE INDEX IF NOT EXISTS match_key_value_bib_id_idx ON " + matchKeyValueTable
                 + " (bib_record_id)",
-        CREATE_IF_NO_EXISTS + clusterRecordTable
-            + "(cluster_id uuid NOT NULL,"
-            + " record_id uuid NOT NULL)",
-        "CREATE UNIQUE INDEX IF NOT EXISTS cluster_record_idx ON " + clusterRecordTable
-            + " (cluster_id, record_id)",
-        CREATE_IF_NO_EXISTS + clusterValueTable
-            + "(cluster_id uuid NOT NULL,"
-            + " match_key_config_id VARCHAR NOT NULL,"
-            + " match_value VARCHAR NOT NULL)",
-        "CREATE UNIQUE INDEX IF NOT EXISTS cluster_value_idx ON " + clusterValueTable
-            + " (match_key_config_id, match_value)"
+            CREATE_IF_NO_EXISTS + clusterRecordTable
+                + "(record_id uuid NOT NULL,"
+                + " match_key_config_id VARCHAR NOT NULL,"
+                + " cluster_id uuid NOT NULL)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS cluster_record_record_matchkey_idx ON "
+                + clusterRecordTable + "(record_id, match_key_config_id)",
+            "CREATE INDEX IF NOT EXISTS cluster_record_cluster_idx ON "
+                + clusterRecordTable + "(cluster_id)",
+            CREATE_IF_NO_EXISTS + clusterValueTable
+                + "(cluster_id uuid NOT NULL,"
+                + " match_key_config_id VARCHAR NOT NULL,"
+                + " match_value VARCHAR NOT NULL)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS cluster_value_value_idx ON "
+                + clusterValueTable + "(match_key_config_id, match_value)",
+            "CREATE INDEX IF NOT EXISTS cluster_value_cluster_idx ON "
+                + clusterValueTable + "(match_key_config_id, cluster_id)"
         )
     ).mapEmpty();
   }
@@ -218,11 +223,6 @@ public class Storage {
           }));
     }
     return future
-        .compose(x -> conn.preparedQuery("DELETE FROM " + clusterRecordTable
-                + " WHERE record_id = $1 AND cluster_id IN("
-                + " SELECT cluster_id FROM " + clusterValueTable
-                + " WHERE match_key_config_id = $2)")
-            .execute(Tuple.of(globalId,matchKeyConfigId)))
         .compose(x -> {
           Iterator<UUID> iterator = clustersFound.iterator();
           if (!iterator.hasNext()) {
@@ -242,10 +242,13 @@ public class Storage {
           return addValuesToCluster(conn, clusterId, matchKeyConfigId, missingValues)
               .map(clusterId);
         })
-        .compose(clusterId -> conn.preparedQuery("INSERT INTO " + clusterRecordTable
-                + " (cluster_id, record_id) VALUES ($1, $2)"
-                + " ON CONFLICT (cluster_id, record_id) DO NOTHING")
-            .execute(Tuple.of(clusterId, globalId)))
+        .compose(clusterId -> {
+          return conn.preparedQuery("INSERT INTO " + clusterRecordTable
+                  + " (record_id, match_key_config_id, cluster_id) VALUES ($1, $2, $3)"
+                  + " ON CONFLICT (record_id, match_key_config_id)"
+                  + " DO UPDATE SET record_id = $1, match_key_config_id = $2, cluster_id = $3")
+              .execute(Tuple.of(globalId, matchKeyConfigId, clusterId));
+        })
         .mapEmpty();
   }
 
@@ -481,7 +484,7 @@ public class Storage {
    * @return async result
    */
   public Future<Void> getAllClusters(RoutingContext ctx, String matchKeyConfigId) {
-    String q = "SELECT DISTINCT ON(cluster_id) cluster_id FROM " + clusterValueTable
+    String q = "SELECT DISTINCT ON(cluster_id) cluster_id FROM " + clusterRecordTable
         + " WHERE match_key_config_id = '" + matchKeyConfigId + "'";
 
     return pool.getConnection().compose(connection ->
