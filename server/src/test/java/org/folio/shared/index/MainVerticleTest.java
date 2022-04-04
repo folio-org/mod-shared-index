@@ -491,6 +491,11 @@ public class MainVerticleTest {
     }
   }
 
+  /**
+   * Check that each records in each cluster contains exactly set of localIds.
+   * @param s cluster response
+   * @param localIds expected localId values for each cluster
+   */
   static void testClusterResponse(String s, List<String> ... localIds) {
     List<Set<String>> foundIds = new ArrayList<>();
     JsonObject clusterResponse = new JsonObject(s);
@@ -500,20 +505,18 @@ public class MainVerticleTest {
       Set<String> ids = new HashSet<>();
       for (int j = 0; j < records.size(); j++) {
         String localId = records.getJsonObject(j).getString("localId");
-        Assert.assertTrue(ids.add(localId));
+        Assert.assertTrue(ids.add(localId)); // repeated localId values would be wrong.
       }
       foundIds.add(ids);
     }
     for (List<String> idList : localIds) {
       String candidate = idList.get(0); // just use first on to find the cluster
-      for (int i = 0; i < foundIds.size(); i++) {
-        Set<String> foundId = foundIds.get(i);
+      for (Set<String> foundId : foundIds) {
         if (foundId.contains(candidate)) {
-          for (int j = 0; j < idList.size(); j++) {
-            Assert.assertTrue(foundId.remove(idList.get(j)));
+          for (String id : idList) {
+            Assert.assertTrue(foundId.remove(id));
           }
           Assert.assertTrue(foundId.isEmpty());
-          foundIds.get(i).clear();
           break;
         }
       }
