@@ -178,13 +178,20 @@ public class Storage {
   Future<Void> updateMatchKeyValues(SqlConnection conn, UUID globalId,
       String matchKeyConfigId, List<String> keys) {
 
-    List<Future<Void>> futures = new ArrayList<>(keys.size());
-    futures.add(deleteMatchKeyValueTable(conn, matchKeyConfigId, globalId));
-    for (String key : keys) {
-      futures.add(upsertMatchKeyValueTable(conn, matchKeyConfigId, globalId, key));
+    String v = System.getenv("MATCHKEY");
+    Future<Void> future = Future.succeededFuture();
+    if (v == null || "original".equals(v)) {
+      List<Future<Void>> futures = new ArrayList<>(keys.size());
+      futures.add(deleteMatchKeyValueTable(conn, matchKeyConfigId, globalId));
+      for (String key : keys) {
+        futures.add(upsertMatchKeyValueTable(conn, matchKeyConfigId, globalId, key));
+      }
+      future = GenericCompositeFuture.all(futures).mapEmpty();
     }
-    return GenericCompositeFuture.all(futures)
-        .compose(x -> updateClusterForRecord(conn, globalId, matchKeyConfigId, keys));
+    if (v == null || "cluster".equals(v)) {
+      future = future.compose(x -> updateClusterForRecord(conn, globalId, matchKeyConfigId, keys));
+    }
+    return future;
   }
 
   Future<Void> updateClusterForRecord(SqlConnection conn, UUID globalId,
