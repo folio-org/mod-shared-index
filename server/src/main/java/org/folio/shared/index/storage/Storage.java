@@ -242,13 +242,13 @@ public class Storage {
           return addValuesToCluster(conn, clusterId, matchKeyConfigId, missingValues)
               .map(clusterId);
         })
-        .compose(clusterId -> {
-          return conn.preparedQuery("INSERT INTO " + clusterRecordTable
-                  + " (record_id, match_key_config_id, cluster_id) VALUES ($1, $2, $3)"
-                  + " ON CONFLICT (record_id, match_key_config_id)"
-                  + " DO UPDATE SET record_id = $1, match_key_config_id = $2, cluster_id = $3")
-              .execute(Tuple.of(globalId, matchKeyConfigId, clusterId));
-        })
+        .compose(clusterId ->
+            conn.preparedQuery("INSERT INTO " + clusterRecordTable
+                    + " (record_id, match_key_config_id, cluster_id) VALUES ($1, $2, $3)"
+                    + " ON CONFLICT (record_id, match_key_config_id)"
+                    + " DO UPDATE SET record_id = $1, match_key_config_id = $2, cluster_id = $3")
+                .execute(Tuple.of(globalId, matchKeyConfigId, clusterId))
+        )
         .mapEmpty();
   }
 
