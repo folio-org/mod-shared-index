@@ -16,6 +16,10 @@ import io.vertx.ext.unit.junit.VertxUnitRunner;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import io.vertx.ext.web.client.WebClient;
 import io.vertx.ext.web.client.predicate.ResponsePredicate;
@@ -487,6 +491,38 @@ public class MainVerticleTest {
     }
   }
 
+  static void testClusterResponse(String s, List<String> ... localIds) {
+    List<Set<String>> foundIds = new ArrayList<>();
+    JsonObject clusterResponse = new JsonObject(s);
+    JsonArray items = clusterResponse.getJsonArray("items");
+    for (int i = 0; i < items.size(); i++) {
+      JsonArray records = items.getJsonObject(i).getJsonArray("records");
+      Set<String> ids = new HashSet<>();
+      for (int j = 0; j < records.size(); j++) {
+        String localId = records.getJsonObject(j).getString("localId");
+        Assert.assertTrue(ids.add(localId));
+      }
+      foundIds.add(ids);
+    }
+    for (List<String> idList : localIds) {
+      String candidate = idList.get(0); // just use first on to find the cluster
+      for (int i = 0; i < foundIds.size(); i++) {
+        Set<String> foundId = foundIds.get(i);
+        if (foundId.contains(candidate)) {
+          for (int j = 0; j < idList.size(); j++) {
+            Assert.assertTrue(foundId.remove(idList.get(j)));
+          }
+          Assert.assertTrue(foundId.isEmpty());
+          foundIds.get(i).clear();
+          break;
+        }
+      }
+    }
+    for (Set<String> foundId : foundIds) {
+      Assert.assertTrue(foundId.isEmpty());
+    }
+  }
+
   static void ingestRecords(JsonArray records, String sourceId) {
     JsonObject request = new JsonObject()
         .put("sourceId", sourceId)
@@ -543,6 +579,19 @@ public class MainVerticleTest {
         .body("items[1].matchkeys.isbn2[0]", is("2"))
         .body("items[1].matchkeys.isbn2[1]", is("3"));
 
+    String s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("matchkeyid", "isbn2")
+        .get("/shared-index/clusters")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(2))
+        .body("items[0].records", hasSize(1))
+        .body("items[1].records", hasSize(1))
+        .extract().body().asString();
+    testClusterResponse(s, List.of("S101"), List.of("S102"));
+
     ingestRecords(records1, sourceId1);
 
     RestAssured.given()
@@ -556,6 +605,19 @@ public class MainVerticleTest {
         .body("items[0].matchkeys.isbn2[0]", is("1"))
         .body("items[1].matchkeys.isbn2[0]", is("2"))
         .body("items[1].matchkeys.isbn2[1]", is("3"));
+
+    s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("matchkeyid", "isbn2")
+        .get("/shared-index/clusters")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(2))
+        .body("items[0].records", hasSize(1))
+        .body("items[1].records", hasSize(1))
+        .extract().body().asString();
+    testClusterResponse(s, List.of("S101"), List.of("S102"));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -587,6 +649,7 @@ public class MainVerticleTest {
         .contentType("text/plain")
         .body(is("Must specify query for delete records"));
   }
+
 
   @Test
   public void testMatchKeysManual() {
@@ -639,7 +702,7 @@ public class MainVerticleTest {
         .body("items[0].matchkeys.isbn[0]", is("1"))
         .body("items[1].matchkeys.isbn[0]", is("2"));
 
-    RestAssured.given()
+    String s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
         .param("matchkeyid", "isbn")
@@ -648,7 +711,9 @@ public class MainVerticleTest {
         .contentType("application/json")
         .body("items", hasSize(2))
         .body("items[0].records", hasSize(1))
-        .body("items[1].records", hasSize(1));
+        .body("items[1].records", hasSize(1))
+        .extract().body().asString();
+    testClusterResponse(s, List.of("S101"), List.of("S102"));
 
     String sourceId2 = UUID.randomUUID().toString();
     JsonArray records2 = new JsonArray()
@@ -660,15 +725,20 @@ public class MainVerticleTest {
         .add(new JsonObject()
             .put("localId", "S202")
             .put("marcPayload", new JsonObject().put("leader", "00914naa  0202   450 "))
-            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("1").add("2").add("3")))
+            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("1").add("2").add("3").add("4")))
         )
         .add(new JsonObject()
             .put("localId", "S203")
             .put("marcPayload", new JsonObject().put("leader", "00914naa  0203   450 "))
-            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("4").add("5")))
+            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("5").add("6")))
         )
         .add(new JsonObject()
             .put("localId", "S204")
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  0204   450 "))
+            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("5")))
+        )
+        .add(new JsonObject()
+            .put("localId", "S205")
             .put("marcPayload", new JsonObject().put("leader", "00914naa  0204   450 "))
             .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("4")))
         );
@@ -683,15 +753,17 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("application/json");
 
-    RestAssured.given()
+    s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
         .param("matchkeyid", "isbn")
         .get("/shared-index/clusters")
         .then().statusCode(200)
         .contentType("application/json")
-        .body("items", hasSize(2));
-    // should check the two clusters one with 4 records with values 1,2 : 2 records with values 3,4
+        .body("items", hasSize(2))
+        .extract().body().asString();
+
+    testClusterResponse(s, List.of("S101", "S102", "S201", "S202", "S205"), List.of("S203", "S204"));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -701,7 +773,7 @@ public class MainVerticleTest {
         .get("/shared-index/records")
         .then().statusCode(200)
         .contentType("application/json")
-        .body("items", hasSize(4));
+        .body("items", hasSize(5));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -711,7 +783,7 @@ public class MainVerticleTest {
         .get("/shared-index/records")
         .then().statusCode(200)
         .contentType("application/json")
-        .body("items", hasSize(4));
+        .body("items", hasSize(5));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -732,7 +804,7 @@ public class MainVerticleTest {
         .get("/shared-index/records")
         .then().statusCode(200)
         .contentType("application/json")
-        .body("items", hasSize(4));
+        .body("items", hasSize(5));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
