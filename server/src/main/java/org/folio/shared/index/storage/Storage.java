@@ -210,29 +210,36 @@ public class Storage {
             return null;
           }));
     }
-    return future.compose(x -> {
-      Iterator<UUID> iterator = clustersFound.iterator();
-      if (!iterator.hasNext()) {
-        return Future.succeededFuture(UUID.randomUUID()); // create new cluster
-      }
-      UUID clusterId = iterator.next();
-      if (!iterator.hasNext()) {
-        return Future.succeededFuture(clusterId); // exactly one already
-      }
-      // multiple clusters: merge remaining with this one
-      return mergeClusters(conn, clusterId, iterator).map(clusterId);
-    }).compose(clusterId -> {
-      if (missingValues.isEmpty()) {
-        return Future.succeededFuture(clusterId);
-      }
-      return addValuesToCluster(conn, clusterId, matchKeyConfigId, missingValues)
-          .map(clusterId);
-    }).compose(clusterId ->
-          conn.preparedQuery("INSERT INTO " + clusterRecordTable
-                  + " (cluster_id, record_id) VALUES ($1, $2)"
-                  + " ON CONFLICT (cluster_id, record_id) DO NOTHING")
-              .execute(Tuple.of(clusterId, globalId))
-    ).mapEmpty();
+    return future
+        .compose(x -> conn.preparedQuery("DELETE FROM " + clusterRecordTable
+                + " WHERE record_id = $1 AND cluster_id IN("
+                + " SELECT cluster_id FROM " + clusterValueTable
+                + " WHERE match_key_config_id = $2)")
+            .execute(Tuple.of(globalId,matchKeyConfigId)))
+        .compose(x -> {
+          Iterator<UUID> iterator = clustersFound.iterator();
+          if (!iterator.hasNext()) {
+            return Future.succeededFuture(UUID.randomUUID()); // create new cluster
+          }
+          UUID clusterId = iterator.next();
+          if (!iterator.hasNext()) {
+            return Future.succeededFuture(clusterId); // exactly one already
+          }
+          // multiple clusters: merge remaining with this one
+          return mergeClusters(conn, clusterId, iterator).map(clusterId);
+        })
+        .compose(clusterId -> {
+          if (missingValues.isEmpty()) {
+            return Future.succeededFuture(clusterId);
+          }
+          return addValuesToCluster(conn, clusterId, matchKeyConfigId, missingValues)
+              .map(clusterId);
+        })
+        .compose(clusterId -> conn.preparedQuery("INSERT INTO " + clusterRecordTable
+                + " (cluster_id, record_id) VALUES ($1, $2)"
+                + " ON CONFLICT (cluster_id, record_id) DO NOTHING")
+            .execute(Tuple.of(clusterId, globalId)))
+        .mapEmpty();
   }
 
   Future<Void> addValuesToCluster(SqlConnection conn, UUID clusterId, String matchKeyConfigId,

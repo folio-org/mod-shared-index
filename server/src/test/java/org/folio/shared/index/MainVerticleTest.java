@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -514,15 +516,15 @@ public class MainVerticleTest {
       for (Set<String> foundId : foundIds) {
         if (foundId.contains(candidate)) {
           for (String id : idList) {
-            Assert.assertTrue(foundId.remove(id));
+            Assert.assertTrue(s, foundId.remove(id));
           }
-          Assert.assertTrue(foundId.isEmpty());
+          Assert.assertTrue(s, foundId.isEmpty());
           break;
         }
       }
     }
     for (Set<String> foundId : foundIds) {
-      Assert.assertTrue(foundId.isEmpty());
+      Assert.assertTrue(s, foundId.isEmpty());
     }
   }
 
@@ -633,6 +635,89 @@ public class MainVerticleTest {
         .header(XOkapiHeaders.TENANT, tenant1)
         .delete("/shared-index/config/matchkeys/" + matchKey.getString("id"))
         .then().statusCode(204);
+  }
+
+  @Test
+  public void testClusters() {
+    JsonObject matchKey = new JsonObject()
+        .put("id", "isbn3")
+        .put("method", "jsonpath")
+        // update = ingest is the default
+        .put("params", new JsonObject().put("inventory", "$.isbn[*]"));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey.encode())
+        .post("/shared-index/config/matchkeys")
+        .then().statusCode(201)
+        .contentType("application/json")
+        .body(Matchers.is(matchKey.encode()));
+
+    String sourceId1 = UUID.randomUUID().toString();
+    JsonArray records1 = new JsonArray()
+        .add(new JsonObject()
+            .put("localId", "S101")
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("1")))
+        )
+        .add(new JsonObject()
+            .put("localId", "S102")
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("2").add("3")))
+        );
+    ingestRecords(records1, sourceId1);
+
+    String s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("matchkeyid", "isbn3")
+        .get("/shared-index/clusters")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(2))
+        .body("items[0].records", hasSize(1))
+        .body("items[1].records", hasSize(1))
+        .extract().body().asString();
+    testClusterResponse(s, List.of("S101"), List.of("S102"));
+
+    records1 = new JsonArray()
+        .add(new JsonObject()
+            .put("localId", "S101")
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("4")))
+        );
+    ingestRecords(records1, sourceId1);
+
+    s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("matchkeyid", "isbn3")
+        .get("/shared-index/clusters")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(3))
+        .extract().body().asString();
+    testClusterResponse(s, List.of("S101"), List.of("S102"));
+
+    records1 = new JsonArray()
+        .add(new JsonObject()
+            .put("localId", "S101")
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add("3")))
+        );
+    ingestRecords(records1, sourceId1);
+
+    s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("matchkeyid", "isbn3")
+        .get("/shared-index/clusters")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(3))
+        .extract().body().asString();
+    testClusterResponse(s, List.of("S101", "S102"));
   }
 
   @Test
