@@ -38,7 +38,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 
@@ -436,7 +435,7 @@ public class MainVerticleTest {
         .header("Content-Type", "application/json")
         .get("/shared-index/records")
         .then().statusCode(200)
-        .body("resultInfo.totalRecords", greaterThanOrEqualTo(2));
+        .body("resultInfo.totalRecords", is(2));
 
     String res = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -722,6 +721,13 @@ public class MainVerticleTest {
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("query", "cql.allRecords=true")
+        .delete("/shared-index/records")
+        .then().statusCode(204);
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
         .delete("/shared-index/config/matchkeys/" + matchKey.getString("id"))
         .then().statusCode(204);
   }
@@ -776,7 +782,7 @@ public class MainVerticleTest {
         .header("Content-Type", "application/json")
         .get("/shared-index/records")
         .then().statusCode(200)
-        .body("resultInfo.totalRecords", greaterThanOrEqualTo(2));
+        .body("resultInfo.totalRecords", is(2));
 
     String s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -801,7 +807,7 @@ public class MainVerticleTest {
         .header("Content-Type", "application/json")
         .get("/shared-index/records")
         .then().statusCode(200)
-        .body("resultInfo.totalRecords", greaterThanOrEqualTo(1));
+        .body("resultInfo.totalRecords", is(1));
 
     s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -826,7 +832,7 @@ public class MainVerticleTest {
         .header("Content-Type", "application/json")
         .get("/shared-index/records")
         .then().statusCode(200)
-        .body("resultInfo.totalRecords", greaterThanOrEqualTo(0));
+        .body("resultInfo.totalRecords", is(0));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
