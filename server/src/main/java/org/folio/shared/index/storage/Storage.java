@@ -203,29 +203,34 @@ public class Storage {
   Future<Void> updateClusterForRecord(SqlConnection conn, UUID globalId,
       String matchKeyConfigId, Collection<String> keys) {
 
-    StringBuilder q = new StringBuilder("SELECT cluster_id, match_value FROM " + clusterValueTable
-        + " WHERE match_key_config_id = $1 AND (");
-    List<Object> tupleList = new ArrayList<>();
-    tupleList.add(matchKeyConfigId);
-    int no = 2;
-    for (String key: keys) {
-      if (no > 2) {
-        q.append(" OR ");
-      }
-      q.append("match_value = $" + no++);
-      tupleList.add(key);
-    }
-    q.append(")");
     Set<UUID> clustersFound = new HashSet<>();
     Set<String> foundKeys = new HashSet<>();
-    return conn.preparedQuery(q.toString())
-        .execute(Tuple.from(tupleList)).map(rowSet -> {
-          rowSet.forEach(row -> {
-            foundKeys.add(row.getString("match_value"));
-            clustersFound.add(row.getUUID("cluster_id"));
+    Future<Void> future = Future.succeededFuture();
+    if (!keys.isEmpty()) {
+      StringBuilder q = new StringBuilder("SELECT cluster_id, match_value FROM " + clusterValueTable
+          + " WHERE match_key_config_id = $1 AND (");
+      List<Object> tupleList = new ArrayList<>();
+      tupleList.add(matchKeyConfigId);
+      int no = 2;
+      for (String key : keys) {
+        if (no > 2) {
+          q.append(" OR ");
+        }
+        q.append("match_value = $" + no++);
+        tupleList.add(key);
+      }
+      q.append(")");
+      future = conn.preparedQuery(q.toString())
+          .execute(Tuple.from(tupleList))
+          .map(rowSet -> {
+            rowSet.forEach(row -> {
+              foundKeys.add(row.getString("match_value"));
+              clustersFound.add(row.getUUID("cluster_id"));
+            });
+            return null;
           });
-          return null;
-        })
+    }
+    return future
         .compose(x -> {
           Iterator<UUID> iterator = clustersFound.iterator();
           if (!iterator.hasNext()) {
@@ -239,7 +244,7 @@ public class Storage {
           return mergeClusters(conn, clusterId, iterator).map(clusterId);
         })
         .compose(clusterId ->
-          addValuesToCluster(conn, clusterId, matchKeyConfigId, keys, foundKeys).map(clusterId)
+            addValuesToCluster(conn, clusterId, matchKeyConfigId, keys, foundKeys).map(clusterId)
         )
         .compose(clusterId ->
             conn.preparedQuery("INSERT INTO " + clusterRecordTable
