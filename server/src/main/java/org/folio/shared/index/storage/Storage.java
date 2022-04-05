@@ -102,7 +102,8 @@ public class Storage {
             CREATE_IF_NO_EXISTS + clusterRecordTable
                 + "(record_id uuid NOT NULL,"
                 + " match_key_config_id VARCHAR NOT NULL,"
-                + " cluster_id uuid NOT NULL)",
+                + " cluster_id uuid NOT NULL,"
+                + " FOREIGN KEY(record_id) REFERENCES " + bibRecordTable + " ON DELETE CASCADE)",
             "CREATE UNIQUE INDEX IF NOT EXISTS cluster_record_record_matchkey_idx ON "
                 + clusterRecordTable + "(record_id, match_key_config_id)",
             "CREATE INDEX IF NOT EXISTS cluster_record_cluster_idx ON "
@@ -650,8 +651,18 @@ public class Storage {
 
   Future<Void> cleanMatchKeyValueTable(SqlConnection connection, String matchKeyMethodId) {
     return connection.preparedQuery("DELETE FROM " + matchKeyValueTable
-        + " WHERE match_key_config_id = $1").execute(
-        Tuple.of(matchKeyMethodId)).mapEmpty();
+            + " WHERE match_key_config_id = $1")
+        .execute(
+            Tuple.of(matchKeyMethodId))
+        .compose(x ->
+            connection.preparedQuery("DELETE FROM " + clusterRecordTable
+                    + " WHERE match_key_config_id = $1")
+                .execute(Tuple.of(matchKeyMethodId)))
+        .compose(x ->
+            connection.preparedQuery("DELETE FROM " + clusterValueTable
+                    + " WHERE match_key_config_id = $1")
+                .execute(Tuple.of(matchKeyMethodId)))
+        .mapEmpty();
   }
 
   Future<Void> deleteMatchKeyValueTable(SqlConnection connection, String matchKeyMethodId,
