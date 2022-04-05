@@ -203,27 +203,29 @@ public class Storage {
   Future<Void> updateClusterForRecord(SqlConnection conn, UUID globalId,
       String matchKeyConfigId, Collection<String> keys) {
 
-    Set<UUID> clustersFound = new HashSet<>();
-    Set<String> missingValues = new HashSet<>();
-    Future<Void> future = Future.succeededFuture();
+    StringBuilder q = new StringBuilder("SELECT cluster_id, match_value FROM " + clusterValueTable
+        + " WHERE match_key_config_id = $1 AND (");
+    List<Object> tupleList = new ArrayList<>();
+    tupleList.add(matchKeyConfigId);
+    int no = 2;
     for (String key: keys) {
-      future = future.compose(x ->
-      conn.preparedQuery("SELECT cluster_id FROM " + clusterValueTable
-              + " WHERE match_key_config_id = $1 AND match_value = $2")
-          .execute(Tuple.of(matchKeyConfigId, key))
-          .map(rowSet -> {
-            RowIterator<Row> iterator = rowSet.iterator();
-            if (iterator.hasNext()) {
-              // there should not be more than one
-              Row row = iterator.next();
-              clustersFound.add(row.getUUID("cluster_id"));
-            } else {
-              missingValues.add(key);
-            }
-            return null;
-          }));
+      if (no > 2) {
+        q.append(" OR ");
+      }
+      q.append("match_value = $" + no++);
+      tupleList.add(key);
     }
-    return future
+    q.append(")");
+    Set<UUID> clustersFound = new HashSet<>();
+    Set<String> foundKeys = new HashSet<>();
+    return conn.preparedQuery(q.toString())
+        .execute(Tuple.from(tupleList)).map(rowSet -> {
+          rowSet.forEach(row -> {
+            foundKeys.add(row.getString("match_value"));
+            clustersFound.add(row.getUUID("cluster_id"));
+          });
+          return null;
+        })
         .compose(x -> {
           Iterator<UUID> iterator = clustersFound.iterator();
           if (!iterator.hasNext()) {
@@ -236,13 +238,9 @@ public class Storage {
           // multiple clusters: merge remaining with this one
           return mergeClusters(conn, clusterId, iterator).map(clusterId);
         })
-        .compose(clusterId -> {
-          if (missingValues.isEmpty()) {
-            return Future.succeededFuture(clusterId);
-          }
-          return addValuesToCluster(conn, clusterId, matchKeyConfigId, missingValues)
-              .map(clusterId);
-        })
+        .compose(clusterId ->
+          addValuesToCluster(conn, clusterId, matchKeyConfigId, keys, foundKeys).map(clusterId)
+        )
         .compose(clusterId ->
             conn.preparedQuery("INSERT INTO " + clusterRecordTable
                     + " (record_id, match_key_config_id, cluster_id) VALUES ($1, $2, $3)"
@@ -254,16 +252,18 @@ public class Storage {
   }
 
   Future<Void> addValuesToCluster(SqlConnection conn, UUID clusterId, String matchKeyConfigId,
-      Collection<String> values) {
+      Collection<String> keys, Set<String> foundKeys) {
 
     Future<Void> future = Future.succeededFuture();
-    for (String val: values) {
-      future = future.compose(x ->
-          conn.preparedQuery("INSERT INTO " + clusterValueTable
-                  + " (cluster_id, match_key_config_id, match_value)"
-                  + " VALUES ($1, $2, $3)")
-              .execute(Tuple.of(clusterId, matchKeyConfigId, val)).mapEmpty()
-      );
+    for (String key: keys) {
+      if (!foundKeys.contains(key)) {
+        future = future.compose(x ->
+            conn.preparedQuery("INSERT INTO " + clusterValueTable
+                    + " (cluster_id, match_key_config_id, match_value)"
+                    + " VALUES ($1, $2, $3)")
+                .execute(Tuple.of(clusterId, matchKeyConfigId, key)).mapEmpty()
+        );
+      }
     }
     return future;
   }
