@@ -92,6 +92,8 @@ public class Storage {
                 + "(bib_record_id uuid NOT NULL,"
                 + " match_key_config_id VARCHAR NOT NULL,"
                 + " match_value VARCHAR NOT NULL,"
+                + " FOREIGN KEY(match_key_config_id) REFERENCES " + matchKeyConfigTable
+                + " ON DELETE CASCADE,"
                 + " CONSTRAINT match_key_value_fk_bib_record FOREIGN KEY "
                 + "    (bib_record_id) REFERENCES " + bibRecordTable + " ON DELETE CASCADE"
                 + ")",
@@ -103,6 +105,8 @@ public class Storage {
                 + "(record_id uuid NOT NULL,"
                 + " match_key_config_id VARCHAR NOT NULL,"
                 + " cluster_id uuid NOT NULL,"
+                + " FOREIGN KEY(match_key_config_id) REFERENCES " + matchKeyConfigTable
+                + " ON DELETE CASCADE,"
                 + " FOREIGN KEY(record_id) REFERENCES " + bibRecordTable + " ON DELETE CASCADE)",
             "CREATE UNIQUE INDEX IF NOT EXISTS cluster_record_record_matchkey_idx ON "
                 + clusterRecordTable + "(record_id, match_key_config_id)",
@@ -111,7 +115,9 @@ public class Storage {
             CREATE_IF_NO_EXISTS + clusterValueTable
                 + "(cluster_id uuid NOT NULL,"
                 + " match_key_config_id VARCHAR NOT NULL,"
-                + " match_value VARCHAR NOT NULL)",
+                + " match_value VARCHAR NOT NULL,"
+                + " FOREIGN KEY(match_key_config_id) REFERENCES " + matchKeyConfigTable
+                + " ON DELETE CASCADE)",
             "CREATE UNIQUE INDEX IF NOT EXISTS cluster_value_value_idx ON "
                 + clusterValueTable + "(match_key_config_id, match_value)",
             "CREATE INDEX IF NOT EXISTS cluster_value_cluster_idx ON "
@@ -623,14 +629,7 @@ public class Storage {
         connection.preparedQuery(
                 "DELETE FROM " + matchKeyConfigTable + " WHERE id = $1")
             .execute(Tuple.of(id))
-            .compose(res -> {
-              if (res.rowCount() == 0) {
-                return Future.succeededFuture(false);
-              }
-              return cleanMatchKeyValueTable(connection, id)
-                  .map(x -> Boolean.TRUE);
-            })
-    );
+            .map(res -> res.rowCount() > 0));
   }
 
   /**
@@ -652,22 +651,6 @@ public class Storage {
             .put("params", row.getJsonObject("params"))
             .put("update", row.getString("update"))
         ));
-  }
-
-  Future<Void> cleanMatchKeyValueTable(SqlConnection connection, String matchKeyMethodId) {
-    return connection.preparedQuery("DELETE FROM " + matchKeyValueTable
-            + " WHERE match_key_config_id = $1")
-        .execute(
-            Tuple.of(matchKeyMethodId))
-        .compose(x ->
-            connection.preparedQuery("DELETE FROM " + clusterRecordTable
-                    + " WHERE match_key_config_id = $1")
-                .execute(Tuple.of(matchKeyMethodId)))
-        .compose(x ->
-            connection.preparedQuery("DELETE FROM " + clusterValueTable
-                    + " WHERE match_key_config_id = $1")
-                .execute(Tuple.of(matchKeyMethodId)))
-        .mapEmpty();
   }
 
   Future<Void> deleteMatchKeyValueTable(SqlConnection connection, String matchKeyMethodId,
