@@ -706,6 +706,7 @@ public class MainVerticleTest {
         .contentType("application/json")
         .body("items", hasSize(1))
         .body("items[0].records", hasSize(1))
+        .body("items[0].clusterId", is(clusterId))
         .extract().body().asString();
 
     RestAssured.given()
