@@ -576,10 +576,16 @@ public class MainVerticleTest {
         .get("/shared-index/records")
         .then().statusCode(200)
         .contentType("application/json")
-        .body("items", hasSize(2))
-        .body("items[0].matchkeys.isbn2[0]", is("1"))
-        .body("items[1].matchkeys.isbn2[0]", is("2"))
-        .body("items[1].matchkeys.isbn2[1]", is("3"));
+        .body("items", hasSize(2));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("query", "sourceId=" + sourceId1)
+        .get("/shared-index/records")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(2));
 
     String s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -594,6 +600,19 @@ public class MainVerticleTest {
         .extract().body().asString();
     testClusterResponse(s, List.of("S101"), List.of("S102"));
 
+    s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("query", "matchValue=3")
+        .param("matchkeyid", "isbn2")
+        .get("/shared-index/clusters")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(1))
+        .body("items[0].records", hasSize(1))
+        .extract().body().asString();
+    testClusterResponse(s, List.of("S102"));
+
     ingestRecords(records1, sourceId1);
 
     RestAssured.given()
@@ -603,10 +622,7 @@ public class MainVerticleTest {
         .get("/shared-index/records")
         .then().statusCode(200)
         .contentType("application/json")
-        .body("items", hasSize(2))
-        .body("items[0].matchkeys.isbn2[0]", is("1"))
-        .body("items[1].matchkeys.isbn2[0]", is("2"))
-        .body("items[1].matchkeys.isbn2[1]", is("3"));
+        .body("items", hasSize(2));
 
     s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -678,6 +694,23 @@ public class MainVerticleTest {
         .body("items[1].records", hasSize(1))
         .extract().body().asString();
     testClusterResponse(s, List.of("S101"), List.of("S102"));
+
+    String clusterId = new JsonObject(s).getJsonArray("items").getJsonObject(0).getString("clusterId");
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .get("/shared-index/clusters/" + clusterId)
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("records", hasSize(1))
+        .body("clusterId", is(clusterId));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .get("/shared-index/clusters/" + UUID.randomUUID())
+        .then().statusCode(404);
 
     log.info("phase 2: S101 from 1 to 4");
     records1 = new JsonArray()
@@ -980,9 +1013,7 @@ public class MainVerticleTest {
         .get("/shared-index/records")
         .then().statusCode(200)
         .contentType("application/json")
-        .body("items", hasSize(2))
-        .body("items[0].matchkeys.isbn[0]", is("1"))
-        .body("items[1].matchkeys.isbn[0]", is("2"));
+        .body("items", hasSize(2));
 
     String s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1050,63 +1081,20 @@ public class MainVerticleTest {
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
-        .param("matchkeyid", "isbn")
-        .param("query", "localId=S101")
-        .get("/shared-index/records")
-        .then().statusCode(200)
-        .contentType("application/json")
-        .body("items", hasSize(5));
-
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant1)
-        .header("Content-Type", "application/json")
-        .param("matchkeyid", "isbn")
-        .param("query", "localId=S101 and sourceId=" + sourceId1)
-        .get("/shared-index/records")
-        .then().statusCode(200)
-        .contentType("application/json")
-        .body("items", hasSize(5));
-
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant1)
-        .header("Content-Type", "application/json")
-        .param("matchkeyid", "isbn")
-        .param("maxiterations", "1")
-        .param("query", "localId=S102 and sourceId=" + sourceId1)
-        .get("/shared-index/records")
-        .then().statusCode(200)
-        .contentType("application/json")
-        .body("items", hasSize(2));
-
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant1)
-        .header("Content-Type", "application/json")
-        .param("matchkeyid", "isbn")
-        .param("query", "localId=S102 and sourceId=" + sourceId1)
-        .get("/shared-index/records")
-        .then().statusCode(200)
-        .contentType("application/json")
-        .body("items", hasSize(5));
-
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant1)
-        .header("Content-Type", "application/json")
-        .param("matchkeyid", "isbn")
-        .param("query", "localId==notfound")
-        .get("/shared-index/records")
-        .then().statusCode(200)
-        .contentType("application/json")
-        .body("items", hasSize(0));
-
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant1)
-        .header("Content-Type", "application/json")
-        .param("matchkeyid", "notfound")
         .param("query", "localId=S101 and sourceId=" + sourceId1)
         .get("/shared-index/records")
         .then().statusCode(200)
         .contentType("application/json")
         .body("items", hasSize(1));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("query", "localId==notfound")
+        .get("/shared-index/records")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(0));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)

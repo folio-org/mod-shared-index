@@ -10,8 +10,7 @@ import io.vertx.ext.web.openapi.RouterBuilder;
 import io.vertx.ext.web.validation.RequestParameter;
 import io.vertx.ext.web.validation.RequestParameters;
 import io.vertx.ext.web.validation.ValidationHandler;
-import java.util.Arrays;
-import java.util.List;
+import java.util.UUID;
 import java.util.function.Function;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -26,7 +25,6 @@ import org.folio.tlib.postgres.PgCqlQuery;
 public class SharedIndexService implements RouterCreator, TenantInitHooks {
 
   private static final Logger log = LogManager.getLogger(SharedIndexService.class);
-  private static final int MATCH_MAX_ITERATIONS = 3;
   final Vertx vertx;
 
   public SharedIndexService(Vertx vertx) {
@@ -85,35 +83,9 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     PgCqlQuery pgCqlQuery = getPqCqlQueryForRecords();
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     pgCqlQuery.parse(getQueryParameter(params));
-    String m = getParameterString(params.queryParameter("matchkeyid"));
     Storage storage = new Storage(ctx);
-    if (m != null) {
-      int maxIterations = getParameterInteger(
-          params.queryParameter("maxiterations"), MATCH_MAX_ITERATIONS);
-      List<String> matchKeyIds = Arrays.asList(m.split(","));
-      return storage.getCluster(pgCqlQuery.getWhereClause(), matchKeyIds, maxIterations)
-          .map(records -> {
-            JsonArray items = new JsonArray();
-            records.forEach((k, v) -> items.add(v));
-            JsonObject result = new JsonObject();
-            result.put("items", items);
-            result.put("totalRecords", records.size());
-            HttpResponse.responseJson(ctx, 200).end(result.encode());
-            return null;
-          });
-    }
     return storage.getSharedRecords(ctx, pgCqlQuery.getWhereClause(),
         pgCqlQuery.getOrderByClause());
-  }
-
-  Future<Void> getClusters(RoutingContext ctx) {
-    PgCqlQuery pgCqlQuery = getPqCqlQueryForRecords();
-    RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
-    pgCqlQuery.parse(getQueryParameter(params));
-    String matchKeyId = getParameterString(params.queryParameter("matchkeyid"));
-    // must also consider query, offset, limit
-    Storage storage = new Storage(ctx);
-    return storage.getAllClusters(ctx, matchKeyId);
   }
 
   Future<Void> getSharedRecordGlobalId(RoutingContext ctx) {
@@ -130,6 +102,37 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
         })
         .mapEmpty();
   }
+
+  Future<Void> getClusters(RoutingContext ctx) {
+    PgCqlQuery pgCqlQuery = getPqCqlQueryForRecords();
+    pgCqlQuery.addField(
+        new PgCqlField("cql.allRecords", PgCqlField.Type.ALWAYS_MATCHES));
+    pgCqlQuery.addField(
+        new PgCqlField("match_value", "matchValue", PgCqlField.Type.TEXT));
+
+    RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
+    pgCqlQuery.parse(getQueryParameter(params));
+    String matchKeyId = getParameterString(params.queryParameter("matchkeyid"));
+    Storage storage = new Storage(ctx);
+    return storage.getClusters(ctx, matchKeyId,
+        pgCqlQuery.getWhereClause(), pgCqlQuery.getOrderByClause());
+  }
+
+  Future<Void> getCluster(RoutingContext ctx) {
+    RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
+    String id = getParameterString(params.pathParameter("clusterId"));
+    Storage storage = new Storage(ctx);
+    return storage.getClusterById(UUID.fromString(id))
+        .onSuccess(res -> {
+          if (res.getJsonArray("records").isEmpty()) {
+            HttpResponse.responseError(ctx, 404, id);
+            return;
+          }
+          HttpResponse.responseJson(ctx, 200).end(res.encode());
+        })
+        .mapEmpty();
+  }
+
 
   static String getMethod(JsonObject config) {
     String method = config.getString("method");
@@ -281,6 +284,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
           add(routerBuilder, "getConfigMatchKeys", this::getConfigMatchKeys);
           add(routerBuilder, "initializeMatchKey", this::initializeMatchKey);
           add(routerBuilder, "getClusters", this::getClusters);
+          add(routerBuilder, "getCluster", this::getCluster);
           return routerBuilder.createRouter();
         });
   }
