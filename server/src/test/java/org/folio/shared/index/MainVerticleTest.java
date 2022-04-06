@@ -696,6 +696,17 @@ public class MainVerticleTest {
     testClusterResponse(s, List.of("S101"), List.of("S102"));
 
     String clusterId = new JsonObject(s).getJsonArray("items").getJsonObject(0).getString("clusterId");
+    s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("query", "clusterId=" + clusterId)
+        .param("matchkeyid", "isbn3")
+        .get("/shared-index/clusters")
+        .then().statusCode(200)
+        .contentType("application/json")
+        .body("items", hasSize(1))
+        .body("items[0].records", hasSize(1))
+        .extract().body().asString();
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
