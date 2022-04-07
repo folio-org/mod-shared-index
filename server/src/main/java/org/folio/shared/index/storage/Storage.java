@@ -38,11 +38,11 @@ public class Storage {
   private static final Logger log = LogManager.getLogger(Storage.class);
 
   private static final String CREATE_IF_NO_EXISTS = "CREATE TABLE IF NOT EXISTS ";
-  TenantPgPool pool;
-  String bibRecordTable;
-  String matchKeyConfigTable;
-  String clusterRecordTable;
-  String clusterValueTable;
+  final TenantPgPool pool;
+  final String bibRecordTable;
+  final String matchKeyConfigTable;
+  final String clusterRecordTable;
+  final String clusterValueTable;
   static int sqlStreamFetchSize = 50;
 
   /**
