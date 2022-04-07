@@ -48,10 +48,15 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     });
   }
 
-  static PgCqlQuery getPqCqlQueryForRecords() {
+  static PgCqlQuery createPgCqlQuery() {
     PgCqlQuery pgCqlQuery = PgCqlQuery.query();
     pgCqlQuery.addField(
         new PgCqlField("cql.allRecords", PgCqlField.Type.ALWAYS_MATCHES));
+    return pgCqlQuery;
+  }
+
+  static PgCqlQuery getPqCqlQueryForRecords() {
+    PgCqlQuery pgCqlQuery = createPgCqlQuery();
     pgCqlQuery.addField(
         new PgCqlField("id", PgCqlField.Type.UUID));
     pgCqlQuery.addField(
@@ -104,9 +109,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
   }
 
   Future<Void> getClusters(RoutingContext ctx) {
-    PgCqlQuery pgCqlQuery = getPqCqlQueryForRecords();
-    pgCqlQuery.addField(
-        new PgCqlField("cql.allRecords", PgCqlField.Type.ALWAYS_MATCHES));
+    PgCqlQuery pgCqlQuery = createPgCqlQuery();
     pgCqlQuery.addField(
         new PgCqlField("match_value", "matchValue", PgCqlField.Type.TEXT));
     pgCqlQuery.addField(
@@ -206,11 +209,8 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
         .mapEmpty();
   }
 
-
   Future<Void> getConfigMatchKeys(RoutingContext ctx) {
-    PgCqlQuery pgCqlQuery = PgCqlQuery.query();
-    pgCqlQuery.addField(
-        new PgCqlField("cql.allRecords", PgCqlField.Type.ALWAYS_MATCHES));
+    PgCqlQuery pgCqlQuery = createPgCqlQuery();
     pgCqlQuery.addField(
         new PgCqlField("id", PgCqlField.Type.TEXT));
     pgCqlQuery.addField(
