@@ -129,12 +129,12 @@ public class Storage {
         .map(rowSet -> rowSet.iterator().next().getUUID("id"));
   }
 
-  Future<Void> upsertSharedRecord(SqlConnection conn, UUID sourceId,
-      JsonObject sharedRecord, JsonArray matchKeyConfigs) {
+  Future<Void> upsertGlobalRecord(SqlConnection conn, UUID sourceId,
+      JsonObject globalRecord, JsonArray matchKeyConfigs) {
 
-    final String localIdentifier = sharedRecord.getString("localId");
-    final JsonObject marcPayload = sharedRecord.getJsonObject("marcPayload");
-    final JsonObject inventoryPayload = sharedRecord.getJsonObject("inventoryPayload");
+    final String localIdentifier = globalRecord.getString("localId");
+    final JsonObject marcPayload = globalRecord.getJsonObject("marcPayload");
+    final JsonObject inventoryPayload = globalRecord.getJsonObject("inventoryPayload");
     return upsertBibRecord(conn, localIdentifier, sourceId, marcPayload, inventoryPayload)
         .compose(id -> updateMatchKeyValues(conn, id,
             marcPayload, inventoryPayload, matchKeyConfigs));
@@ -267,11 +267,11 @@ public class Storage {
   }
 
   /**
-   * Upsert set of records.
+   * Update/insert set of global records.
    * @param request ingest record request
    * @return async result
    */
-  public Future<Void> upsertSharedRecords(JsonObject request) {
+  public Future<Void> updateGlobalRecords(JsonObject request) {
     UUID sourceId = UUID.fromString(request.getString("sourceId"));
     JsonArray records = request.getJsonArray("records");
 
@@ -279,8 +279,8 @@ public class Storage {
         getAvailableMatchConfigs(conn).compose(matchKeyConfigs -> {
           List<Future<Void>> futures = new ArrayList<>(records.size());
           for (int i = 0; i < records.size(); i++) {
-            JsonObject sharedRecord = records.getJsonObject(i);
-            futures.add(upsertSharedRecord(conn, sourceId, sharedRecord, matchKeyConfigs));
+            JsonObject globalRecord = records.getJsonObject(i);
+            futures.add(upsertGlobalRecord(conn, sourceId, globalRecord, matchKeyConfigs));
           }
           return GenericCompositeFuture.all(futures).mapEmpty();
         })
@@ -313,11 +313,11 @@ public class Storage {
   }
 
   /**
-   * Delete shared records and corresponding match value table entries.
+   * Delete global records and corresponding match value table entries.
    * @param sqlWhere SQL WHERE clause
    * @return async result
    */
-  public Future<Void> deleteSharedRecords(String sqlWhere) {
+  public Future<Void> deleteGlobalRecords(String sqlWhere) {
     String from = bibRecordTable;
     if (sqlWhere != null) {
       from = from + " WHERE " + sqlWhere;
@@ -326,13 +326,13 @@ public class Storage {
   }
 
   /**
-   * Get shared records.
+   * Get global records.
    * @param ctx routing context
    * @param sqlWhere SQL WHERE clause
    * @param sqlOrderBy the SQL ORDER BY clause
    * @return async result
    */
-  public Future<Void> getSharedRecords(RoutingContext ctx, String sqlWhere, String sqlOrderBy) {
+  public Future<Void> getGlobalRecords(RoutingContext ctx, String sqlWhere, String sqlOrderBy) {
     String from = bibRecordTable;
     if (sqlWhere != null) {
       from = from + " WHERE " + sqlWhere;
@@ -396,11 +396,11 @@ public class Storage {
   }
 
   /**
-   * Select shared record given global identifier.
+   * Get global record given global identifier.
    * @param id global identifier
-   * @return shared record response as JSON object
+   * @return global record response as JSON object
    */
-  public Future<JsonObject> selectSharedRecord(String id) {
+  public Future<JsonObject> getGlobalRecord(String id) {
     return pool.preparedQuery(
             "SELECT * FROM " + bibRecordTable + " WHERE id = $1")
         .execute(Tuple.of(id))
