@@ -93,21 +93,25 @@ public class Storage {
                 + " ON DELETE CASCADE)",
             CREATE_IF_NO_EXISTS + clusterRecordTable
                 + "(record_id uuid NOT NULL,"
+                + " match_key_config_id VARCHAR NOT NULL,"
                 + " cluster_id uuid NOT NULL,"
-                + " FOREIGN KEY(cluster_id) REFERENCES " + clusterMetaTable
+                + " FOREIGN KEY(match_key_config_id) REFERENCES " + matchKeyConfigTable
                 + " ON DELETE CASCADE,"
                 + " FOREIGN KEY(record_id) REFERENCES " + bibRecordTable + " ON DELETE CASCADE)",
-            "CREATE UNIQUE INDEX IF NOT EXISTS cluster_record_record_idx ON "
-                + clusterRecordTable + "(record_id, cluster_id)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS cluster_record_record_matchkey_idx ON "
+                + clusterRecordTable + "(record_id, match_key_config_id)",
             "CREATE INDEX IF NOT EXISTS cluster_record_cluster_idx ON "
                 + clusterRecordTable + "(cluster_id)",
             CREATE_IF_NO_EXISTS + clusterValueTable
                 + "(cluster_id uuid NOT NULL,"
+                + " match_key_config_id VARCHAR NOT NULL,"
                 + " match_value VARCHAR NOT NULL,"
-                + " FOREIGN KEY(cluster_id) REFERENCES " + clusterMetaTable
+                + " FOREIGN KEY(match_key_config_id) REFERENCES " + matchKeyConfigTable
                 + " ON DELETE CASCADE)",
             "CREATE UNIQUE INDEX IF NOT EXISTS cluster_value_value_idx ON "
-                + clusterValueTable + "(cluster_id, match_value)"
+                + clusterValueTable + "(match_key_config_id, match_value)",
+            "CREATE INDEX IF NOT EXISTS cluster_value_cluster_idx ON "
+                + clusterValueTable + "(cluster_id)"
         )
     ).mapEmpty();
   }
@@ -186,10 +190,7 @@ public class Storage {
     Set<String> foundKeys = new HashSet<>();
     Future<Void> future = Future.succeededFuture();
     if (!keys.isEmpty()) {
-      StringBuilder q = new StringBuilder("SELECT " + clusterMetaTable
-          + ".cluster_id, match_value FROM " + clusterValueTable
-          + " INNER JOIN " + clusterMetaTable + " ON "
-          + clusterMetaTable + ".cluster_id = " + clusterValueTable + ".cluster_id"
+      StringBuilder q = new StringBuilder("SELECT cluster_id, match_value FROM " + clusterValueTable
           + " WHERE match_key_config_id = $1 AND (");
       List<Object> tupleList = new ArrayList<>();
       tupleList.add(matchKeyConfigId);
@@ -206,6 +207,7 @@ public class Storage {
           .execute(Tuple.from(tupleList))
           .map(rowSet -> {
             rowSet.forEach(row -> {
+              log.info("match key row {}", row.deepToString());
               foundKeys.add(row.getString("match_value"));
               clustersFound.add(row.getUUID("cluster_id"));
             });
@@ -216,7 +218,8 @@ public class Storage {
         .compose(x -> {
           Iterator<UUID> iterator = clustersFound.iterator();
           if (!iterator.hasNext()) {
-            return createCluster(conn, matchKeyConfigId); // create new cluster
+            return Future.succeededFuture(UUID.randomUUID()); // create new cluster
+            // return createCluster(conn, matchKeyConfigId); // create new cluster
           }
           UUID clusterId = iterator.next();
           if (!iterator.hasNext()) {
@@ -225,18 +228,20 @@ public class Storage {
           // multiple clusters: merge remaining with this one
           return mergeClusters(conn, clusterId, iterator).map(clusterId);
         })
-        .compose(clusterId -> addValuesToCluster(conn, clusterId, keys, foundKeys).map(clusterId))
+        .compose(clusterId ->
+            addValuesToCluster(conn, clusterId, matchKeyConfigId, keys, foundKeys).map(clusterId)
+        )
         .compose(clusterId ->
             conn.preparedQuery("INSERT INTO " + clusterRecordTable
-                    + " (record_id, cluster_id) VALUES ($1, $2)"
-                    + " ON CONFLICT (record_id, cluster_id)"
-                    + " DO UPDATE SET record_id = $1, cluster_id = $2")
-                .execute(Tuple.of(globalId, clusterId))
+                    + " (record_id, match_key_config_id, cluster_id) VALUES ($1, $2, $3)"
+                    + " ON CONFLICT (record_id, match_key_config_id)"
+                    + " DO UPDATE SET record_id = $1, match_key_config_id = $2, cluster_id = $3")
+                .execute(Tuple.of(globalId, matchKeyConfigId, clusterId))
         )
         .mapEmpty();
   }
 
-  Future<Void> addValuesToCluster(SqlConnection conn, UUID clusterId,
+  Future<Void> addValuesToCluster(SqlConnection conn, UUID clusterId, String matchKeyConfigId,
       Collection<String> keys, Set<String> foundKeys) {
 
     Future<Void> future = Future.succeededFuture();
@@ -244,9 +249,9 @@ public class Storage {
       if (!foundKeys.contains(key)) {
         future = future.compose(x ->
             conn.preparedQuery("INSERT INTO " + clusterValueTable
-                    + " (cluster_id, match_value)"
-                    + " VALUES ($1, $2)")
-                .execute(Tuple.of(clusterId, key)).mapEmpty()
+                    + " (cluster_id, match_key_config_id, match_value)"
+                    + " VALUES ($1, $2, $3)")
+                .execute(Tuple.of(clusterId, matchKeyConfigId, key)).mapEmpty()
         );
       }
     }
@@ -277,6 +282,7 @@ public class Storage {
         .execute(Tuple.from(tupleList))
         .compose(x -> conn.preparedQuery("UPDATE " + clusterRecordTable + setClause)
             .execute(Tuple.from(tupleList)))
+        /*
         .compose(x -> {
           StringBuilder q = new StringBuilder("DELETE FROM " + clusterMetaTable + " WHERE ");
           List<UUID> removedList = tupleList.subList(1, tupleList.size());
@@ -289,10 +295,10 @@ public class Storage {
           }
           return conn.preparedQuery(q.toString()).execute(Tuple.from(removedList));
         })
-        .mapEmpty();
-    // delete entries clusterMetaTable
-  }
 
+         */
+        .mapEmpty();
+  }
 
   /**
    * Update/insert set of global records.
@@ -414,13 +420,13 @@ public class Storage {
    */
   public Future<Void> getClusters(RoutingContext ctx, String matchKeyId,
       String sqlWhere, String sqlOrderBy) {
-    String from = clusterMetaTable + " LEFT JOIN " + clusterValueTable + " ON "
-        + clusterMetaTable + ".cluster_id = " + clusterValueTable + ".cluster_id"
-        + " WHERE match_key_config_id = $1";
+    String from = clusterRecordTable + " LEFT JOIN " + clusterValueTable + " ON "
+        + clusterValueTable + ".cluster_id = " + clusterRecordTable + ".cluster_id"
+        + " WHERE " + clusterRecordTable + ".match_key_config_id = $1";
     if (sqlWhere != null) {
       from = from + " AND (" + sqlWhere + ")";
     }
-    return streamResult(ctx, clusterMetaTable + ".cluster_id", Tuple.of(matchKeyId),
+    return streamResult(ctx, clusterRecordTable + ".cluster_id", Tuple.of(matchKeyId),
         from, sqlOrderBy, "items",
         row -> getClusterById(row.getUUID("cluster_id")));
   }
