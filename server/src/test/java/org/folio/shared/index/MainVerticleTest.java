@@ -703,7 +703,8 @@ public class MainVerticleTest {
     log.info("phase 1: insert two separate isbn recs, but one with issn");
     ingestRecords(records1, sourceId1);
 
-    String s = RestAssured.given()
+    String s;
+    s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
         .param("matchkeyid", "issn")

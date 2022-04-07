@@ -98,7 +98,7 @@ public class Storage {
                 + " ON DELETE CASCADE,"
                 + " FOREIGN KEY(record_id) REFERENCES " + bibRecordTable + " ON DELETE CASCADE)",
             "CREATE UNIQUE INDEX IF NOT EXISTS cluster_record_record_idx ON "
-                + clusterRecordTable + "(cluster_id,record_id)",
+                + clusterRecordTable + "(record_id, cluster_id)",
             "CREATE INDEX IF NOT EXISTS cluster_record_cluster_idx ON "
                 + clusterRecordTable + "(cluster_id)",
             CREATE_IF_NO_EXISTS + clusterValueTable
@@ -107,9 +107,7 @@ public class Storage {
                 + " FOREIGN KEY(cluster_id) REFERENCES " + clusterMetaTable
                 + " ON DELETE CASCADE)",
             "CREATE UNIQUE INDEX IF NOT EXISTS cluster_value_value_idx ON "
-                + clusterValueTable + "(match_value)",
-            "CREATE INDEX IF NOT EXISTS cluster_value_cluster_idx ON "
-                + clusterValueTable + "(cluster_id)"
+                + clusterValueTable + "(cluster_id, match_value)"
         )
     ).mapEmpty();
   }
@@ -218,7 +216,7 @@ public class Storage {
         .compose(x -> {
           Iterator<UUID> iterator = clustersFound.iterator();
           if (!iterator.hasNext()) {
-            return Future.succeededFuture(UUID.randomUUID()); // create new cluster
+            return createCluster(conn, matchKeyConfigId); // create new cluster
           }
           UUID clusterId = iterator.next();
           if (!iterator.hasNext()) {
@@ -227,20 +225,18 @@ public class Storage {
           // multiple clusters: merge remaining with this one
           return mergeClusters(conn, clusterId, iterator).map(clusterId);
         })
-        .compose(clusterId ->
-            addValuesToCluster(conn, clusterId, matchKeyConfigId, keys, foundKeys).map(clusterId)
-        )
+        .compose(clusterId -> addValuesToCluster(conn, clusterId, keys, foundKeys).map(clusterId))
         .compose(clusterId ->
             conn.preparedQuery("INSERT INTO " + clusterRecordTable
-                    + " (record_id, match_key_config_id, cluster_id) VALUES ($1, $2, $3)"
-                    + " ON CONFLICT (record_id, match_key_config_id)"
-                    + " DO UPDATE SET record_id = $1, match_key_config_id = $2, cluster_id = $3")
-                .execute(Tuple.of(globalId, matchKeyConfigId, clusterId))
+                    + " (record_id, cluster_id) VALUES ($1, $2)"
+                    + " ON CONFLICT (record_id, cluster_id)"
+                    + " DO UPDATE SET record_id = $1, cluster_id = $2")
+                .execute(Tuple.of(globalId, clusterId))
         )
         .mapEmpty();
   }
 
-  Future<Void> addValuesToCluster(SqlConnection conn, UUID clusterId, String matchKeyConfigId,
+  Future<Void> addValuesToCluster(SqlConnection conn, UUID clusterId,
       Collection<String> keys, Set<String> foundKeys) {
 
     Future<Void> future = Future.succeededFuture();
@@ -255,6 +251,14 @@ public class Storage {
       }
     }
     return future;
+  }
+
+  Future<UUID> createCluster(SqlConnection conn, String matchKeyConfigId) {
+    UUID clusterId = UUID.randomUUID();
+    return conn.preparedQuery("INSERT INTO " + clusterMetaTable
+            + " (cluster_id, match_key_config_id) VALUES ($1, $2)")
+        .execute(Tuple.of(clusterId, matchKeyConfigId))
+        .map(clusterId);
   }
 
   Future<Void> mergeClusters(SqlConnection conn, UUID clusterId, Iterator<UUID> iterator) {
@@ -272,8 +276,23 @@ public class Storage {
     return conn.preparedQuery("UPDATE " + clusterValueTable + setClause)
         .execute(Tuple.from(tupleList))
         .compose(x -> conn.preparedQuery("UPDATE " + clusterRecordTable + setClause)
-            .execute(Tuple.from(tupleList))).mapEmpty();
+            .execute(Tuple.from(tupleList)))
+        .compose(x -> {
+          StringBuilder q = new StringBuilder("DELETE FROM " + clusterMetaTable + " WHERE ");
+          List<UUID> removedList = tupleList.subList(1, tupleList.size());
+          for (int no = 1; no <= removedList.size(); no++) {
+            if (no > 1) {
+              q.append(" OR ");
+            }
+            q.append("cluster_id = $");
+            q.append(no);
+          }
+          return conn.preparedQuery(q.toString()).execute(Tuple.from(removedList));
+        })
+        .mapEmpty();
+    // delete entries clusterMetaTable
   }
+
 
   /**
    * Update/insert set of global records.
@@ -347,7 +366,10 @@ public class Storage {
       from = from + " WHERE " + sqlWhere;
     }
     return streamResult(ctx, null, from, sqlOrderBy, "items",
-        row -> Future.succeededFuture(handleRecord(row)));
+        row -> {
+      log.info("ROW {}", row.deepToString());
+      return Future.succeededFuture(handleRecord(row));
+        });
   }
 
   /**
@@ -360,12 +382,14 @@ public class Storage {
   }
 
   Future<JsonObject> getClusterById(SqlConnection connection, UUID clusterId) {
+    log.info("getClusterById {}", clusterId);
     return connection.preparedQuery("SELECT * FROM " + bibRecordTable
             + " LEFT JOIN " + clusterRecordTable + " ON id = record_id"
             + " WHERE cluster_id = $1")
         .execute(Tuple.of(clusterId))
         .map(rowSet -> {
           JsonArray records = new JsonArray();
+          rowSet.forEach(row -> log.info("getClusterById {}", row.deepToString()));
           rowSet.forEach(row -> records.add(handleRecord(row)));
           return new JsonObject()
               .put("clusterId", clusterId.toString())
