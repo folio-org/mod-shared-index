@@ -148,7 +148,7 @@ public class Storage {
       future = future.compose(x -> updateMatchKeyValues(conn, globalId,
           marcPayload, inventoryPayload, matchKeyConfig));
     }
-    return Future.succeededFuture();
+    return future;
   }
 
   Future<Void> updateMatchKeyValues(SqlConnection conn, UUID globalId,
