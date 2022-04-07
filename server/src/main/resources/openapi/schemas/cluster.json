@@ -21,13 +21,6 @@
       "items": {
         "type" : "string"
       }
-    },
-    "matchKeys": {
-      "description" : "Match keys values",
-      "type" : "array",
-      "items": {
-        "type" : "string"
-      }
     }
   },
   "additionalProperties": false,
