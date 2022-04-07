@@ -373,10 +373,6 @@ public class Storage {
             }));
   }
 
-  private static String postgresString(String s) {
-    return "'" + s + "'";
-  }
-
   /**
    * return all clusters as streaming result.
    * @param ctx routing context
@@ -387,11 +383,12 @@ public class Storage {
       String sqlWhere, String sqlOrderBy) {
     String from = clusterRecordTable + " LEFT JOIN " + clusterValueTable + " ON "
         + clusterValueTable + ".cluster_id = " + clusterRecordTable + ".cluster_id"
-        + " WHERE " + clusterRecordTable + ".match_key_config_id = " + postgresString(matchKeyId);
+        + " WHERE " + clusterRecordTable + ".match_key_config_id = $1";
     if (sqlWhere != null) {
       from = from + " AND (" + sqlWhere + ")";
     }
-    return streamResult(ctx, clusterRecordTable + ".cluster_id", from, sqlOrderBy, "items",
+    return streamResult(ctx, clusterRecordTable + ".cluster_id", Tuple.of(matchKeyId),
+        from, sqlOrderBy, "items",
         row -> getClusterById(row.getUUID("cluster_id")));
   }
 
@@ -624,7 +621,7 @@ public class Storage {
   }
 
   Future<Void> streamResult(RoutingContext ctx, SqlConnection sqlConnection,
-      String query, String cnt, String property, List<String[]> facets,
+      String query, String cnt, Tuple tuple, String property, List<String[]> facets,
       Function<Row, Future<JsonObject>> handler) {
 
     return sqlConnection.prepare(query)
@@ -634,7 +631,7 @@ public class Storage {
               ctx.response().putHeader("Content-Type", "application/json");
               ctx.response().write("{ \"" + property + "\" : [");
               AtomicBoolean first = new AtomicBoolean(true);
-              RowStream<Row> stream = pq.createStream(sqlStreamFetchSize);
+              RowStream<Row> stream = pq.createStream(sqlStreamFetchSize, tuple);
               stream.handler(row -> {
                 stream.pause();
                 Future<JsonObject> f = handler.apply(row);
@@ -650,7 +647,7 @@ public class Storage {
                   stream.resume();
                 });
               });
-              stream.endHandler(end -> sqlConnection.query(cnt).execute()
+              stream.endHandler(end -> sqlConnection.preparedQuery(cnt).execute(tuple)
                   .onSuccess(cntRes -> resultFooter(ctx, cntRes, facets, null))
                   .onFailure(f -> {
                     log.error(f.getMessage(), f);
@@ -670,13 +667,20 @@ public class Storage {
   Future<Void> streamResult(RoutingContext ctx, String distinct, String from, String orderByClause,
       String property, Function<Row, Future<JsonObject>> handler) {
 
-    return streamResult(ctx, distinct, distinct, List.of(from), Collections.emptyList(),
+    return streamResult(ctx, distinct, distinct, Tuple.tuple(), List.of(from),
+        Collections.emptyList(), orderByClause, property, handler);
+  }
+
+  Future<Void> streamResult(RoutingContext ctx, String distinct, Tuple tuple, String from,
+      String orderByClause, String property, Function<Row, Future<JsonObject>> handler) {
+
+    return streamResult(ctx, distinct, distinct, tuple, List.of(from), Collections.emptyList(),
         orderByClause, property, handler);
   }
 
   @java.lang.SuppressWarnings({"squid:S107"})  // too many arguments
   Future<Void> streamResult(RoutingContext ctx, String distinctMain, String distinctCount,
-      List<String> fromList, List<String[]> facets, String orderByClause,
+      Tuple tuple, List<String> fromList, List<String[]> facets, String orderByClause,
       String property, Function<Row, Future<JsonObject>> handler) {
 
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
@@ -701,7 +705,7 @@ public class Storage {
     log.info("cnt={}", countQuery);
     return pool.getConnection()
         .compose(sqlConnection -> streamResult(ctx, sqlConnection, query, countQuery.toString(),
-            property, facets, handler)
+            tuple, property, facets, handler)
             .onFailure(x -> sqlConnection.close()));
   }
 
