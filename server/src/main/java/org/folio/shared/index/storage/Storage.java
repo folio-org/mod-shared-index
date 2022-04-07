@@ -43,6 +43,7 @@ public class Storage {
   final String matchKeyConfigTable;
   final String clusterRecordTable;
   final String clusterValueTable;
+  final String clusterMetaTable;
   static int sqlStreamFetchSize = 50;
 
   /**
@@ -56,6 +57,7 @@ public class Storage {
     this.matchKeyConfigTable = pool.getSchema() + ".match_key_config";
     this.clusterRecordTable = pool.getSchema() + ".cluster_records";
     this.clusterValueTable = pool.getSchema() + ".cluster_values";
+    this.clusterMetaTable = pool.getSchema() + ".cluster_meta";
   }
 
   public Storage(RoutingContext routingContext) {
@@ -83,25 +85,29 @@ public class Storage {
                 + " method VARCHAR, "
                 + " update VARCHAR, "
                 + " params JSONB)",
+            CREATE_IF_NO_EXISTS + clusterMetaTable
+                + "(cluster_id uuid NOT NULL PRIMARY KEY,"
+                + " match_key_config_id VARCHAR NOT NULL,"
+                + " modified TIMESTAMP,"
+                + " FOREIGN KEY(match_key_config_id) REFERENCES " + matchKeyConfigTable
+                + " ON DELETE CASCADE)",
             CREATE_IF_NO_EXISTS + clusterRecordTable
                 + "(record_id uuid NOT NULL,"
-                + " match_key_config_id VARCHAR NOT NULL,"
                 + " cluster_id uuid NOT NULL,"
-                + " FOREIGN KEY(match_key_config_id) REFERENCES " + matchKeyConfigTable
+                + " FOREIGN KEY(cluster_id) REFERENCES " + clusterMetaTable
                 + " ON DELETE CASCADE,"
                 + " FOREIGN KEY(record_id) REFERENCES " + bibRecordTable + " ON DELETE CASCADE)",
-            "CREATE UNIQUE INDEX IF NOT EXISTS cluster_record_record_matchkey_idx ON "
-                + clusterRecordTable + "(record_id, match_key_config_id)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS cluster_record_record_idx ON "
+                + clusterRecordTable + "(cluster_id,record_id)",
             "CREATE INDEX IF NOT EXISTS cluster_record_cluster_idx ON "
                 + clusterRecordTable + "(cluster_id)",
             CREATE_IF_NO_EXISTS + clusterValueTable
                 + "(cluster_id uuid NOT NULL,"
-                + " match_key_config_id VARCHAR NOT NULL,"
                 + " match_value VARCHAR NOT NULL,"
-                + " FOREIGN KEY(match_key_config_id) REFERENCES " + matchKeyConfigTable
+                + " FOREIGN KEY(cluster_id) REFERENCES " + clusterMetaTable
                 + " ON DELETE CASCADE)",
             "CREATE UNIQUE INDEX IF NOT EXISTS cluster_value_value_idx ON "
-                + clusterValueTable + "(match_key_config_id, match_value)",
+                + clusterValueTable + "(match_value)",
             "CREATE INDEX IF NOT EXISTS cluster_value_cluster_idx ON "
                 + clusterValueTable + "(cluster_id)"
         )
@@ -182,7 +188,9 @@ public class Storage {
     Set<String> foundKeys = new HashSet<>();
     Future<Void> future = Future.succeededFuture();
     if (!keys.isEmpty()) {
-      StringBuilder q = new StringBuilder("SELECT cluster_id, match_value FROM " + clusterValueTable
+      StringBuilder q = new StringBuilder("SELECT " + clusterMetaTable + ".cluster_id, match_value FROM " + clusterValueTable
+          + " INNER JOIN " + clusterMetaTable + " ON "
+          + clusterMetaTable + ".cluster_id = " + clusterValueTable + ".cluster_id"
           + " WHERE match_key_config_id = $1 AND (");
       List<Object> tupleList = new ArrayList<>();
       tupleList.add(matchKeyConfigId);
@@ -239,9 +247,9 @@ public class Storage {
       if (!foundKeys.contains(key)) {
         future = future.compose(x ->
             conn.preparedQuery("INSERT INTO " + clusterValueTable
-                    + " (cluster_id, match_key_config_id, match_value)"
-                    + " VALUES ($1, $2, $3)")
-                .execute(Tuple.of(clusterId, matchKeyConfigId, key)).mapEmpty()
+                    + " (cluster_id, match_value)"
+                    + " VALUES ($1, $2)")
+                .execute(Tuple.of(clusterId, key)).mapEmpty()
         );
       }
     }
@@ -385,13 +393,13 @@ public class Storage {
    */
   public Future<Void> getClusters(RoutingContext ctx, String matchKeyId,
       String sqlWhere, String sqlOrderBy) {
-    String from = clusterRecordTable + " LEFT JOIN " + clusterValueTable + " ON "
-        + clusterValueTable + ".cluster_id = " + clusterRecordTable + ".cluster_id"
-        + " WHERE " + clusterRecordTable + ".match_key_config_id = " + postgresString(matchKeyId);
+    String from = clusterMetaTable + " LEFT JOIN " + clusterValueTable + " ON " +
+        clusterMetaTable + ".cluster_id = " + clusterValueTable + ".cluster_id"
+        + " WHERE match_key_config_id = " + postgresString(matchKeyId);
     if (sqlWhere != null) {
       from = from + " AND (" + sqlWhere + ")";
     }
-    return streamResult(ctx, clusterRecordTable + ".cluster_id", from, sqlOrderBy, "items",
+    return streamResult(ctx, clusterMetaTable + ".cluster_id", from, sqlOrderBy, "items",
         row -> getClusterById(row.getUUID("cluster_id")));
   }
 
