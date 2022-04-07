@@ -326,7 +326,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: schemas/sharedIndexTitles.json
+                $ref: schemas/globalRecords.json
         "400":
           $ref: "#/components/responses/trait_400"
         "500":
@@ -351,7 +351,7 @@ paths:
         "500":
           $ref: "#/components/responses/trait_500"
     delete:
-      description: Delete shared records.
+      description: Delete global records.
       operationId: deleteSharedRecords
       responses:
         "204":
@@ -377,11 +377,11 @@ paths:
       operationId: getSharedRecordGlobalId
       responses:
         "200":
-          description: shared index record found.
+          description: global record found.
           content:
             application/json:
               schema:
-                $ref: schemas/sharedIndexTitle.json
+                $ref: schemas/globalRecord.json
         "400":
           $ref: "#/components/responses/trait_400"
         "404":

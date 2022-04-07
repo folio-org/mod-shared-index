@@ -1,5 +1,5 @@
 {
-  "description": "Shared record",
+  "description": "Global record",
   "type": "object",
   "properties": {
     "globalId": {
