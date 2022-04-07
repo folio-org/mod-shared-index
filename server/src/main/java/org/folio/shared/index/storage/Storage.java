@@ -103,7 +103,7 @@ public class Storage {
             "CREATE UNIQUE INDEX IF NOT EXISTS cluster_value_value_idx ON "
                 + clusterValueTable + "(match_key_config_id, match_value)",
             "CREATE INDEX IF NOT EXISTS cluster_value_cluster_idx ON "
-                + clusterValueTable + "(match_key_config_id, cluster_id)"
+                + clusterValueTable + "(cluster_id)"
         )
     ).mapEmpty();
   }
@@ -363,7 +363,7 @@ public class Storage {
               .put("records", records);
         })
         .compose(object -> connection.preparedQuery("SELECT * FROM " + clusterValueTable
-              + " WHERE cluster_id = $1") // TODO AND match_key_config_id as there an index for it!
+              + " WHERE cluster_id = $1")
             .execute(Tuple.of(clusterId))
             .map(rowSet -> {
               JsonArray values = new JsonArray();
