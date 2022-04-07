@@ -135,12 +135,12 @@ public class Storage {
         .map(rowSet -> rowSet.iterator().next().getUUID("id"));
   }
 
-  Future<Void> upsertSharedRecord(SqlConnection conn, UUID sourceId,
-      JsonObject sharedRecord, JsonArray matchKeyConfigs) {
+  Future<Void> upsertGlobalRecord(SqlConnection conn, UUID sourceId,
+      JsonObject globalRecord, JsonArray matchKeyConfigs) {
 
-    final String localIdentifier = sharedRecord.getString("localId");
-    final JsonObject marcPayload = sharedRecord.getJsonObject("marcPayload");
-    final JsonObject inventoryPayload = sharedRecord.getJsonObject("inventoryPayload");
+    final String localIdentifier = globalRecord.getString("localId");
+    final JsonObject marcPayload = globalRecord.getJsonObject("marcPayload");
+    final JsonObject inventoryPayload = globalRecord.getJsonObject("inventoryPayload");
     return upsertBibRecord(conn, localIdentifier, sourceId, marcPayload, inventoryPayload)
         .compose(id -> updateMatchKeyValues(conn, id,
             marcPayload, inventoryPayload, matchKeyConfigs));
@@ -188,7 +188,8 @@ public class Storage {
     Set<String> foundKeys = new HashSet<>();
     Future<Void> future = Future.succeededFuture();
     if (!keys.isEmpty()) {
-      StringBuilder q = new StringBuilder("SELECT " + clusterMetaTable + ".cluster_id, match_value FROM " + clusterValueTable
+      StringBuilder q = new StringBuilder("SELECT " + clusterMetaTable
+          + ".cluster_id, match_value FROM " + clusterValueTable
           + " INNER JOIN " + clusterMetaTable + " ON "
           + clusterMetaTable + ".cluster_id = " + clusterValueTable + ".cluster_id"
           + " WHERE match_key_config_id = $1 AND (");
@@ -275,11 +276,11 @@ public class Storage {
   }
 
   /**
-   * Upsert set of records.
+   * Update/insert set of global records.
    * @param request ingest record request
    * @return async result
    */
-  public Future<Void> upsertSharedRecords(JsonObject request) {
+  public Future<Void> updateGlobalRecords(JsonObject request) {
     UUID sourceId = UUID.fromString(request.getString("sourceId"));
     JsonArray records = request.getJsonArray("records");
 
@@ -287,8 +288,8 @@ public class Storage {
         getAvailableMatchConfigs(conn).compose(matchKeyConfigs -> {
           List<Future<Void>> futures = new ArrayList<>(records.size());
           for (int i = 0; i < records.size(); i++) {
-            JsonObject sharedRecord = records.getJsonObject(i);
-            futures.add(upsertSharedRecord(conn, sourceId, sharedRecord, matchKeyConfigs));
+            JsonObject globalRecord = records.getJsonObject(i);
+            futures.add(upsertGlobalRecord(conn, sourceId, globalRecord, matchKeyConfigs));
           }
           return GenericCompositeFuture.all(futures).mapEmpty();
         })
@@ -321,11 +322,11 @@ public class Storage {
   }
 
   /**
-   * Delete shared records and corresponding match value table entries.
+   * Delete global records and corresponding match value table entries.
    * @param sqlWhere SQL WHERE clause
    * @return async result
    */
-  public Future<Void> deleteSharedRecords(String sqlWhere) {
+  public Future<Void> deleteGlobalRecords(String sqlWhere) {
     String from = bibRecordTable;
     if (sqlWhere != null) {
       from = from + " WHERE " + sqlWhere;
@@ -334,13 +335,13 @@ public class Storage {
   }
 
   /**
-   * Get shared records.
+   * Get global records.
    * @param ctx routing context
    * @param sqlWhere SQL WHERE clause
    * @param sqlOrderBy the SQL ORDER BY clause
    * @return async result
    */
-  public Future<Void> getSharedRecords(RoutingContext ctx, String sqlWhere, String sqlOrderBy) {
+  public Future<Void> getGlobalRecords(RoutingContext ctx, String sqlWhere, String sqlOrderBy) {
     String from = bibRecordTable;
     if (sqlWhere != null) {
       from = from + " WHERE " + sqlWhere;
@@ -381,10 +382,6 @@ public class Storage {
             }));
   }
 
-  private static String postgresString(String s) {
-    return "'" + s + "'";
-  }
-
   /**
    * return all clusters as streaming result.
    * @param ctx routing context
@@ -393,22 +390,23 @@ public class Storage {
    */
   public Future<Void> getClusters(RoutingContext ctx, String matchKeyId,
       String sqlWhere, String sqlOrderBy) {
-    String from = clusterMetaTable + " LEFT JOIN " + clusterValueTable + " ON " +
-        clusterMetaTable + ".cluster_id = " + clusterValueTable + ".cluster_id"
-        + " WHERE match_key_config_id = " + postgresString(matchKeyId);
+    String from = clusterMetaTable + " LEFT JOIN " + clusterValueTable + " ON "
+        + clusterMetaTable + ".cluster_id = " + clusterValueTable + ".cluster_id"
+        + " WHERE match_key_config_id = $1";
     if (sqlWhere != null) {
       from = from + " AND (" + sqlWhere + ")";
     }
-    return streamResult(ctx, clusterMetaTable + ".cluster_id", from, sqlOrderBy, "items",
+    return streamResult(ctx, clusterMetaTable + ".cluster_id", Tuple.of(matchKeyId),
+        from, sqlOrderBy, "items",
         row -> getClusterById(row.getUUID("cluster_id")));
   }
 
   /**
-   * Select shared record given global identifier.
+   * Get global record given global identifier.
    * @param id global identifier
-   * @return shared record response as JSON object
+   * @return global record response as JSON object
    */
-  public Future<JsonObject> selectSharedRecord(String id) {
+  public Future<JsonObject> getGlobalRecord(String id) {
     return pool.preparedQuery(
             "SELECT * FROM " + bibRecordTable + " WHERE id = $1")
         .execute(Tuple.of(id))
@@ -631,8 +629,9 @@ public class Storage {
     ctx.response().end();
   }
 
+  @java.lang.SuppressWarnings({"squid:S107"})  // too many arguments
   Future<Void> streamResult(RoutingContext ctx, SqlConnection sqlConnection,
-      String query, String cnt, String property, List<String[]> facets,
+      String query, String cnt, Tuple tuple, String property, List<String[]> facets,
       Function<Row, Future<JsonObject>> handler) {
 
     return sqlConnection.prepare(query)
@@ -642,7 +641,7 @@ public class Storage {
               ctx.response().putHeader("Content-Type", "application/json");
               ctx.response().write("{ \"" + property + "\" : [");
               AtomicBoolean first = new AtomicBoolean(true);
-              RowStream<Row> stream = pq.createStream(sqlStreamFetchSize);
+              RowStream<Row> stream = pq.createStream(sqlStreamFetchSize, tuple);
               stream.handler(row -> {
                 stream.pause();
                 Future<JsonObject> f = handler.apply(row);
@@ -658,7 +657,7 @@ public class Storage {
                   stream.resume();
                 });
               });
-              stream.endHandler(end -> sqlConnection.query(cnt).execute()
+              stream.endHandler(end -> sqlConnection.preparedQuery(cnt).execute(tuple)
                   .onSuccess(cntRes -> resultFooter(ctx, cntRes, facets, null))
                   .onFailure(f -> {
                     log.error(f.getMessage(), f);
@@ -678,13 +677,20 @@ public class Storage {
   Future<Void> streamResult(RoutingContext ctx, String distinct, String from, String orderByClause,
       String property, Function<Row, Future<JsonObject>> handler) {
 
-    return streamResult(ctx, distinct, distinct, List.of(from), Collections.emptyList(),
+    return streamResult(ctx, distinct, distinct, Tuple.tuple(), List.of(from),
+        Collections.emptyList(), orderByClause, property, handler);
+  }
+
+  Future<Void> streamResult(RoutingContext ctx, String distinct, Tuple tuple, String from,
+      String orderByClause, String property, Function<Row, Future<JsonObject>> handler) {
+
+    return streamResult(ctx, distinct, distinct, tuple, List.of(from), Collections.emptyList(),
         orderByClause, property, handler);
   }
 
   @java.lang.SuppressWarnings({"squid:S107"})  // too many arguments
   Future<Void> streamResult(RoutingContext ctx, String distinctMain, String distinctCount,
-      List<String> fromList, List<String[]> facets, String orderByClause,
+      Tuple tuple, List<String> fromList, List<String[]> facets, String orderByClause,
       String property, Function<Row, Future<JsonObject>> handler) {
 
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
@@ -709,7 +715,7 @@ public class Storage {
     log.info("cnt={}", countQuery);
     return pool.getConnection()
         .compose(sqlConnection -> streamResult(ctx, sqlConnection, query, countQuery.toString(),
-            property, facets, handler)
+            tuple, property, facets, handler)
             .onFailure(x -> sqlConnection.close()));
   }
 

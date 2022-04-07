@@ -319,21 +319,21 @@ paths:
     get:
       description: Get records that satisfy CQL query with fields localId,
         matchkeyId, matchedWith.
-      operationId: getSharedRecords
+      operationId: getGlobalRecords
       responses:
         "200":
-          description: shared index record(s) found
+          description: globalindex record(s) found
           content:
             application/json:
               schema:
-                $ref: schemas/sharedIndexTitles.json
+                $ref: schemas/globalRecords.json
         "400":
           $ref: "#/components/responses/trait_400"
         "500":
           $ref: "#/components/responses/trait_500"
     put:
       description: Create or update records.
-      operationId: putSharedRecords
+      operationId: putGlobalRecords
       requestBody:
         content:
           application/json:
@@ -351,8 +351,8 @@ paths:
         "500":
           $ref: "#/components/responses/trait_500"
     delete:
-      description: Delete shared records.
-      operationId: deleteSharedRecords
+      description: Delete global records.
+      operationId: deleteGlobalRecords
       responses:
         "204":
           description: Records deleted
@@ -374,14 +374,14 @@ paths:
           format: uuid
     get:
       description: Get record with global identifier.
-      operationId: getSharedRecordGlobalId
+      operationId: getGlobalRecord
       responses:
         "200":
-          description: shared index record found.
+          description: global record found.
           content:
             application/json:
               schema:
-                $ref: schemas/sharedIndexTitle.json
+                $ref: schemas/globalRecord.json
         "400":
           $ref: "#/components/responses/trait_400"
         "404":
