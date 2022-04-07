@@ -620,6 +620,7 @@ public class Storage {
     ctx.response().end();
   }
 
+  @java.lang.SuppressWarnings({"squid:S107"})  // too many arguments
   Future<Void> streamResult(RoutingContext ctx, SqlConnection sqlConnection,
       String query, String cnt, Tuple tuple, String property, List<String[]> facets,
       Function<Row, Future<JsonObject>> handler) {
