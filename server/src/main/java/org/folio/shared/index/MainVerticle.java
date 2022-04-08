@@ -1,7 +1,6 @@
 package org.folio.shared.index;
 
 import io.vertx.core.AbstractVerticle;
-import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.http.HttpServerOptions;
 import org.apache.logging.log4j.LogManager;
