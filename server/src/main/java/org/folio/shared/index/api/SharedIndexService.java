@@ -106,6 +106,10 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
         .mapEmpty();
   }
 
+  void matchKeyNotFound(RoutingContext ctx, String id) {
+    HttpResponse.responseError(ctx, 404, "MatchKey " + id + " not found");
+  }
+
   Future<Void> getClusters(RoutingContext ctx) {
     PgCqlQuery pgCqlQuery = createPgCqlQuery();
     pgCqlQuery.addField(
@@ -119,7 +123,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     Storage storage = new Storage(ctx);
     return storage.selectMatchKeyConfig(matchKeyId).compose(conf -> {
       if (conf == null) {
-        HttpResponse.responseError(ctx, 404, "MatchKey " + matchKeyId + " not found");
+        matchKeyNotFound(ctx, matchKeyId);
         return Future.succeededFuture();
       }
       return storage.getClusters(ctx, matchKeyId,
@@ -172,7 +176,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     return storage.selectMatchKeyConfig(id)
         .onSuccess(res -> {
           if (res == null) {
-            HttpResponse.responseError(ctx, 404, "MatchKey " + id + " not found");
+            matchKeyNotFound(ctx, id);
             return;
           }
           HttpResponse.responseJson(ctx, 200).end(res.encode());
@@ -190,7 +194,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     return storage.updateMatchKeyConfig(id, method, params, update)
         .onSuccess(res -> {
           if (Boolean.FALSE.equals(res)) {
-            HttpResponse.responseError(ctx, 404, "MatchKey " + id + " not found");
+            matchKeyNotFound(ctx, id);
             return;
           }
           ctx.response().setStatusCode(204).end();
@@ -205,7 +209,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     return storage.deleteMatchKeyConfig(id)
         .onSuccess(res -> {
           if (Boolean.FALSE.equals(res)) {
-            HttpResponse.responseError(ctx, 404, "MatchKey " + id + " not found");
+            matchKeyNotFound(ctx, id);
             return;
           }
           ctx.response().setStatusCode(204).end();
@@ -235,7 +239,7 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     return storage.initializeMatchKey(id)
         .onSuccess(res -> {
           if (res == null) {
-            HttpResponse.responseError(ctx, 404, "MatchKey " + id + " not found");
+            matchKeyNotFound(ctx, id);
             return;
           }
           HttpResponse.responseJson(ctx, 200).end(res.encode());
