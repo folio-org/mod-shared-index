@@ -410,15 +410,15 @@ public class Storage {
   }
 
   Future<JsonObject> getClusterById(SqlConnection connection, UUID clusterId) {
-    log.info("getClusterById {}", clusterId);
+    // get all records part of cluster and join with cluster_meta to get modified
     return connection.preparedQuery("SELECT * FROM " + bibRecordTable
             + " LEFT JOIN " + clusterRecordTable + " ON id = record_id"
-            + " LEFT JOIN " + clusterMetaTable + " ON " + clusterMetaTable + ".cluster_id = " + clusterRecordTable + ".cluster_id"
+            + " LEFT JOIN " + clusterMetaTable + " ON "
+            + clusterMetaTable + ".cluster_id = " + clusterRecordTable + ".cluster_id"
             + " WHERE " + clusterRecordTable + ".cluster_id = $1")
         .execute(Tuple.of(clusterId))
         .map(rowSet -> {
           JsonArray records = new JsonArray();
-          rowSet.forEach(row -> log.info("getClusterById {}", row.deepToString()));
           rowSet.forEach(row -> records.add(handleRecord(row)));
           JsonObject o = new JsonObject()
               .put("clusterId", clusterId.toString())
