@@ -1,5 +1,5 @@
 in: query
-name: set
+name: metadataPrefix
 description: OAI metadataPrefix. Required for verb=ListRecords|GetRecord
 required: true
 schema:
