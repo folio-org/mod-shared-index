@@ -148,7 +148,7 @@ public class XmlJsonUtilTest {
           break;
         }
         TransformerFactory transformerFactory = TransformerFactory.newInstance();
-        Source xslt = new StreamSource("src/test/resources/marc2inventory-instance.xsl");
+        Source xslt = new StreamSource("../xsl/marc2inventory-instance.xsl");
         Transformer transformer = transformerFactory.newTransformer(xslt);
         Source source = new StreamSource(new StringReader(doc));
         StreamResult result = new StreamResult(new StringWriter());
@@ -397,20 +397,17 @@ public class XmlJsonUtilTest {
       Assert.assertEquals("inventory xml: missing record/localIdentifier string", t.getMessage());
     }
 
-    {
-      JsonObject inventoryPayload = new JsonObject().put("record", new JsonObject().put("localIdentifier", "123"));
-      Throwable t = Assert.assertThrows(IllegalArgumentException.class,
-          () -> XmlJsonUtil.createIngestRecord(marcPayload, inventoryPayload));
-      Assert.assertEquals("inventory xml: missing record/instance object", t.getMessage());
-    }
-
     JsonObject ingest = XmlJsonUtil.createIngestRecord(marcPayload, new JsonObject()
         .put("record", new JsonObject()
+            .put("original", "2")
             .put("localIdentifier", "123")
             .put("instance", new JsonObject().put("a", "b"))));
     Assert.assertEquals(marcPayload, ingest.getJsonObject("marcPayload"));
     Assert.assertEquals("123", ingest.getString("localId"));
-    Assert.assertEquals(new JsonObject().put("a", "b"), ingest.getJsonObject("inventoryPayload"));
+    Assert.assertEquals(new JsonObject()
+            .put("localIdentifier", "123")
+            .put("instance", new JsonObject().put("a", "b")),
+        ingest.getJsonObject("inventoryPayload"));
 
     ingest = XmlJsonUtil.createIngestRecord(marcPayload, new JsonObject()
         .put("collection", new JsonObject()
@@ -419,7 +416,10 @@ public class XmlJsonUtilTest {
                 .put("instance", new JsonObject().put("a", "b")))));
     Assert.assertEquals(marcPayload, ingest.getJsonObject("marcPayload"));
     Assert.assertEquals("123", ingest.getString("localId"));
-    Assert.assertEquals(new JsonObject().put("a", "b"), ingest.getJsonObject("inventoryPayload"));
+    Assert.assertEquals(new JsonObject()
+            .put("localIdentifier", "123")
+            .put("instance", new JsonObject().put("a", "b")),
+        ingest.getJsonObject("inventoryPayload"));
   }
 
   @Test
@@ -427,8 +427,14 @@ public class XmlJsonUtilTest {
       TransformerException, ParserConfigurationException, SAXException {
 
     TransformerFactory transformerFactory = TransformerFactory.newInstance();
-    Source xslt = new StreamSource("src/test/resources/marc2inventory-instance.xsl");
-    List<Transformer> transformers = List.of(transformerFactory.newTransformer(xslt));
+    Source instanceXslt = new StreamSource("../xsl/marc2inventory-instance.xsl");
+    Source holdingsXslt = new StreamSource("../xsl/holdings-items-cst.xsl");
+    Source librayCodesXstXslt = new StreamSource("../xsl/library-codes-cst.xsl");
+    List<Transformer> transformers = List.of(
+        transformerFactory.newTransformer(instanceXslt),
+        transformerFactory.newTransformer(holdingsXslt),
+        transformerFactory.newTransformer(librayCodesXstXslt)
+    );
 
     InputStream stream = new FileInputStream("src/test/resources/record10.xml");
     XMLInputFactory factory = XMLInputFactory.newInstance();
@@ -445,10 +451,16 @@ public class XmlJsonUtilTest {
         ingestRecords.add(XmlJsonUtil.createIngestRecord(doc, transformers));
       }
     }
-    Assert.assertEquals("a1", ingestRecords.getJsonObject(0).getString("localId"));
-    Assert.assertEquals("a2", ingestRecords.getJsonObject(1).getString("localId"));
-    Assert.assertEquals("a10", ingestRecords.getJsonObject(9).getString("localId"));
     Assert.assertEquals(10, ingestRecords.size());
+    for (int i = 0; i < 10; i++) {
+      Assert.assertEquals("a" + (i + 1), ingestRecords.getJsonObject(i).getString("localId"));
+      JsonObject inventoryPayload =  ingestRecords.getJsonObject(i).getJsonObject("inventoryPayload");
+      if (i == 0) {
+        System.out.println(inventoryPayload.encodePrettily());
+      }
+      Assert.assertTrue(inventoryPayload.encodePrettily(), inventoryPayload.containsKey("instance"));
+      Assert.assertTrue(inventoryPayload.encodePrettily(), inventoryPayload.containsKey("holdingsRecords"));
+      Assert.assertEquals("US-CSt", inventoryPayload.getString("institutionDeref"));
+    }
   }
-
 }
