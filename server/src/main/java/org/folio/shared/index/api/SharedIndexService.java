@@ -56,6 +56,8 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     pgCqlQuery.addField(
         new PgCqlField("id", PgCqlField.Type.UUID));
     pgCqlQuery.addField(
+        new PgCqlField("id", "globalId", PgCqlField.Type.UUID));
+    pgCqlQuery.addField(
         new PgCqlField("local_id", "localId", PgCqlField.Type.TEXT));
     pgCqlQuery.addField(
         new PgCqlField("source_id", "sourceId", PgCqlField.Type.UUID));
@@ -115,8 +117,14 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
     pgCqlQuery.parse(getQueryParameter(params));
     String matchKeyId = getParameterString(params.queryParameter("matchkeyid"));
     Storage storage = new Storage(ctx);
-    return storage.getClusters(ctx, matchKeyId,
-        pgCqlQuery.getWhereClause(), pgCqlQuery.getOrderByClause());
+    return storage.selectMatchKeyConfig(matchKeyId).compose(conf -> {
+      if (conf == null) {
+        HttpResponse.responseError(ctx, 404, "MatchKey " + matchKeyId + " not found");
+        return Future.succeededFuture();
+      }
+      return storage.getClusters(ctx, matchKeyId,
+          pgCqlQuery.getWhereClause(), pgCqlQuery.getOrderByClause());
+    });
   }
 
   Future<Void> getCluster(RoutingContext ctx) {
