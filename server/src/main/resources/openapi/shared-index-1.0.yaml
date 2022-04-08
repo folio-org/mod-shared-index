@@ -456,7 +456,7 @@ paths:
       operationId: oaiRequest
       responses:
         "200":
-          description: cluster record(s) found
+          description: OAI response
           content:
             text/xml:
               schema:
