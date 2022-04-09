@@ -67,6 +67,14 @@ public class Storage {
     this(routingContext.vertx(), TenantUtil.tenant(routingContext));
   }
 
+  public TenantPgPool getPool() {
+    return pool;
+  }
+
+  public String getClusterMetaTable() {
+    return clusterMetaTable;
+  }
+
   /**
    * Prepares storage with tables, etc.
    * @return async result.
@@ -91,7 +99,7 @@ public class Storage {
             CREATE_IF_NO_EXISTS + clusterMetaTable
                 + "(cluster_id uuid NOT NULL PRIMARY KEY,"
                 + " match_key_config_id VARCHAR NOT NULL,"
-                + " modified TIMESTAMP,"
+                + " datestamp TIMESTAMP,"
                 + " FOREIGN KEY(match_key_config_id) REFERENCES " + matchKeyConfigTable
                 + " ON DELETE CASCADE)",
             CREATE_IF_NO_EXISTS + clusterRecordTable
@@ -293,14 +301,14 @@ public class Storage {
 
   Future<UUID> createCluster(SqlConnection conn, UUID clusterId, String matchKeyConfigId) {
     return conn.preparedQuery("INSERT INTO " + clusterMetaTable
-            + " (cluster_id, modified, match_key_config_id) VALUES ($1, $2, $3)")
+            + " (cluster_id, datestamp, match_key_config_id) VALUES ($1, $2, $3)")
         .execute(Tuple.of(clusterId, LocalDateTime.now(ZoneOffset.UTC), matchKeyConfigId))
         .map(clusterId);
   }
 
   Future<Void> updateCluster(SqlConnection conn, UUID clusterId) {
     return conn.preparedQuery("UPDATE " + clusterMetaTable
-            + " SET modified = $2 WHERE cluster_id = $1")
+            + " SET datestamp = $2 WHERE cluster_id = $1")
         .execute(Tuple.of(clusterId, LocalDateTime.now(ZoneOffset.UTC)))
         .mapEmpty();
   }
@@ -410,7 +418,7 @@ public class Storage {
   }
 
   Future<JsonObject> getClusterById(SqlConnection connection, UUID clusterId) {
-    // get all records part of cluster and join with cluster_meta to get modified
+    // get all records part of cluster and join with cluster_meta to get datestamp
     return connection.preparedQuery("SELECT * FROM " + bibRecordTable
             + " LEFT JOIN " + clusterRecordTable + " ON id = record_id"
             + " LEFT JOIN " + clusterMetaTable + " ON "
@@ -426,7 +434,7 @@ public class Storage {
           RowIterator<Row> iterator = rowSet.iterator();
           if (iterator.hasNext()) {
             Row row = iterator.next();
-            o.put("modified", row.getLocalDateTime("modified")
+            o.put("datestamp", row.getLocalDateTime("datestamp")
                 .format(DateTimeFormatter.ISO_DATE_TIME));
           }
           return o;

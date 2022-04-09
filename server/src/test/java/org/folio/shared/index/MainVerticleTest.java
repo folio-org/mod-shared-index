@@ -761,7 +761,8 @@ public class MainVerticleTest {
     testClusterResponse(s, List.of("S101"), List.of("S102"));
 
     String clusterId = new JsonObject(s).getJsonArray("items").getJsonObject(0).getString("clusterId");
-    String modified = new JsonObject(s).getJsonArray("items").getJsonObject(0).getString("modified");
+    String datestamp = new JsonObject(s).getJsonArray("items").getJsonObject(0).getString("datestamp");
+    Assert.assertNotNull(datestamp);
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -774,7 +775,7 @@ public class MainVerticleTest {
         .body("items", hasSize(1))
         .body("items[0].records", hasSize(1))
         .body("items[0].clusterId", is(clusterId))
-        .body("items[0].modified", is(modified));
+        .body("items[0].datestamp", is(datestamp));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)

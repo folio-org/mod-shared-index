@@ -452,8 +452,8 @@ paths:
       - $ref: parameters/oai-verb.yaml
       - $ref: parameters/oai-metadataPrefix.yaml
     get:
-      description: OAI request
-      operationId: oaiRequest
+      description: OAI service
+      operationId: oaiService
       responses:
         "200":
           description: OAI response
