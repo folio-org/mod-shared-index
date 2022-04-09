@@ -25,6 +25,8 @@ import org.folio.shared.index.util.XmlJsonUtil;
 public final class OaiService {
   private static final Logger log = LogManager.getLogger(OaiService.class);
 
+  private OaiService() { }
+
   static Future<Void> get(RoutingContext ctx) {
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     String verb = Util.getParameterString(params.queryParameter("verb"));
