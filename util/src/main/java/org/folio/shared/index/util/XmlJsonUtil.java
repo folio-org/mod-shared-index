@@ -244,7 +244,12 @@ public class XmlJsonUtil {
     throw new IllegalArgumentException("xmlToJsonObject not returning JsonObject");
   }
 
-  private static String encodeXmlText(String s) {
+  /**
+   * Encode encode XML string.
+   * @param s string
+   * @return encoded string
+   */
+  public static String encodeXmlText(String s) {
     StringBuilder res = new StringBuilder();
     for (int i = 0; i < s.length(); i++) {
       char c = s.charAt(i);

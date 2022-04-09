@@ -16,7 +16,6 @@ import io.vertx.sqlclient.SqlConnection;
 import io.vertx.sqlclient.Tuple;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -434,8 +433,7 @@ public class Storage {
           RowIterator<Row> iterator = rowSet.iterator();
           if (iterator.hasNext()) {
             Row row = iterator.next();
-            o.put("datestamp", row.getLocalDateTime("datestamp")
-                .format(DateTimeFormatter.ISO_DATE_TIME));
+            o.put("datestamp", row.getLocalDateTime("datestamp").atZone(ZoneOffset.UTC).toString());
           }
           return o;
         })
