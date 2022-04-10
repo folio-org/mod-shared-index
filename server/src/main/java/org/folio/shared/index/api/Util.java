@@ -5,6 +5,8 @@ import io.vertx.ext.web.validation.RequestParameters;
 
 public final class Util {
 
+  private Util() { }
+
   static String getParameterString(RequestParameter parameter) {
     return parameter == null ? null : parameter.getString();
   }

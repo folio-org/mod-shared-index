@@ -22,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -497,18 +498,25 @@ public class MainVerticleTest {
     }
   }
 
-  static void verifyOaiResponse(String s, List<String> ... localIds) throws XMLStreamException {
+  static void verifyOaiResponse(String s, List<String> identifiers, List<String> ... localIds) throws XMLStreamException {
     InputStream stream = new ByteArrayInputStream(s.getBytes());
     XMLInputFactory factory = XMLInputFactory.newInstance();
     XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
 
+    identifiers.clear();
     int offset = 0;
     while (xmlStreamReader.hasNext()) {
       int event = xmlStreamReader.next();
-      if (event == XMLStreamConstants.START_ELEMENT && "record".equals(xmlStreamReader.getLocalName())) {
-        String xmlRecord = XmlJsonUtil.getSubDocument(event, xmlStreamReader);
-        log.info("record {} {}", offset, xmlRecord);
-        offset++;
+      if (event == XMLStreamConstants.START_ELEMENT) {
+        if ("record".equals(xmlStreamReader.getLocalName())) {
+          offset++;
+        }
+        if ("identifier".equals(xmlStreamReader.getLocalName()) && xmlStreamReader.hasNext()) {
+          event = xmlStreamReader.next();
+          if (event == XMLStreamConstants.CHARACTERS) {
+            identifiers.add(xmlStreamReader.getText());
+          }
+        }
       }
     }
     Assert.assertEquals(s, localIds.length, offset);
@@ -722,17 +730,6 @@ public class MainVerticleTest {
         .contentType("application/json")
         .body(Matchers.is(matchKey1.encode()));
 
-    String s = RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant1)
-        .param("set", "isbn")
-        .param("verb", "ListRecords")
-        .param("metadataPrefix", "marcxml")
-        .get("/shared-index/oai")
-        .then().statusCode(200)
-        .contentType("text/xml")
-        .extract().body().asString();
-    log.info("s = {}", s);
-
     JsonObject matchKey2 = new JsonObject()
         .put("id", "issn")
         .put("method", "jsonpath")
@@ -769,7 +766,7 @@ public class MainVerticleTest {
     log.info("phase 1: insert two separate isbn recs, but one with issn");
     ingestRecords(records1, sourceId1);
 
-    s = RestAssured.given()
+    String s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
         .param("matchkeyid", "issn")
@@ -780,17 +777,6 @@ public class MainVerticleTest {
         .body("items[0].records", hasSize(2))
         .extract().body().asString();
     verifyClusterResponse(s, List.of("S101", "S102"));
-
-    s = RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant1)
-        .param("set", "issn")
-        .param("verb", "ListRecords")
-        .param("metadataPrefix", "marcxml")
-        .get("/shared-index/oai")
-        .then().statusCode(200)
-        .contentType("text/xml")
-        .extract().body().asString();
-    verifyOaiResponse(s, List.of("S101", "S102"));
 
     s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -836,17 +822,6 @@ public class MainVerticleTest {
         .header("Content-Type", "application/json")
         .get("/shared-index/clusters/" + UUID.randomUUID())
         .then().statusCode(404);
-
-    s = RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant1)
-        .param("set", "isbn")
-        .param("verb", "ListRecords")
-        .param("metadataPrefix", "marcxml")
-        .get("/shared-index/oai")
-        .then().statusCode(200)
-        .contentType("text/xml")
-        .extract().body().asString();
-    verifyOaiResponse(s, List.of("S101"), List.of("S102"));
 
     log.info("phase 2: S101 from 1 to 4");
     records1 = new JsonArray()
@@ -1299,9 +1274,9 @@ public class MainVerticleTest {
         .param("verb", "GetRecord")
         .param("metadataPrefix", "marcxml")
         .get("/shared-index/oai")
-        .then().statusCode(500)
+        .then().statusCode(400)
         .contentType("text/xml")
-        .body(containsString("<error code=\"internal\">Not implemented</error>"));
+        .body(containsString("error code=\"badArgument\">missing identifier</error>"));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1331,6 +1306,129 @@ public class MainVerticleTest {
         .then().statusCode(400)
         .contentType("text/xml")
         .body(containsString("<error code=\"badArgument\">set &quot;isbn&quot; not found</error>"));
+  }
+
+  @Test
+  public void testOaiSimple() throws XMLStreamException {
+    JsonObject matchKey1 = new JsonObject()
+        .put("id", "isbn")
+        .put("method", "jsonpath")
+        // update = ingest is the default
+        .put("params", new JsonObject().put("inventory", "$.isbn[*]"));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey1.encode())
+        .post("/shared-index/config/matchkeys")
+        .then().statusCode(201)
+        .contentType("application/json")
+        .body(Matchers.is(matchKey1.encode()));
+
+    String s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("set", "isbn")
+        .param("verb", "ListRecords")
+        .param("metadataPrefix", "marcxml")
+        .get("/shared-index/oai")
+        .then().statusCode(200)
+        .contentType("text/xml")
+        .extract().body().asString();
+    log.info("s = {}", s);
+
+    JsonObject matchKey2 = new JsonObject()
+        .put("id", "issn")
+        .put("method", "jsonpath")
+        // update = ingest is the default
+        .put("params", new JsonObject().put("inventory", "$.issn[*]"));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey2.encode())
+        .post("/shared-index/config/matchkeys")
+        .then().statusCode(201)
+        .contentType("application/json")
+        .body(Matchers.is(matchKey2.encode()));
+
+    String sourceId1 = UUID.randomUUID().toString();
+    JsonArray records1 = new JsonArray()
+        .add(new JsonObject()
+            .put("localId", "S101")
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("inventoryPayload", new JsonObject()
+                .put("isbn", new JsonArray().add("1"))
+                .put("issn", new JsonArray().add("01"))
+            )
+        )
+        .add(new JsonObject()
+            .put("localId", "S102")
+            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("inventoryPayload", new JsonObject()
+                .put("isbn", new JsonArray().add("2").add("3"))
+                .put("issn", new JsonArray().add("01"))
+            )
+        );
+    ingestRecords(records1, sourceId1);
+
+    s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("set", "issn")
+        .param("verb", "ListRecords")
+        .param("metadataPrefix", "marcxml")
+        .get("/shared-index/oai")
+        .then().statusCode(200)
+        .contentType("text/xml")
+        .extract().body().asString();
+    List<String> identifiers = new LinkedList<>();
+    verifyOaiResponse(s, identifiers, List.of("S101", "S102"));
+
+    s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("verb", "GetRecord")
+        .param("metadataPrefix", "marcxml")
+        .param("identifier", identifiers.get(0))
+        .get("/shared-index/oai")
+        .then().statusCode(200)
+        .contentType("text/xml")
+        .extract().body().asString();
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("verb", "GetRecord")
+        .param("metadataPrefix", "marcxml")
+        .param("identifier", UUID.randomUUID().toString())
+        .get("/shared-index/oai")
+        .then().statusCode(400)
+        .contentType("text/xml")
+        .body(containsString("idDoesNotExist"));
+
+    s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("set", "isbn")
+        .param("verb", "ListRecords")
+        .param("metadataPrefix", "marcxml")
+        .get("/shared-index/oai")
+        .then().statusCode(200)
+        .contentType("text/xml")
+        .extract().body().asString();
+    verifyOaiResponse(s, identifiers, List.of("S101"), List.of("S102"));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("query", "cql.allRecords=true")
+        .delete("/shared-index/records")
+        .then().statusCode(204);
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .delete("/shared-index/config/matchkeys/isbn")
+        .then().statusCode(204);
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .delete("/shared-index/config/matchkeys/issn")
+        .then().statusCode(204);
   }
 
   @Test

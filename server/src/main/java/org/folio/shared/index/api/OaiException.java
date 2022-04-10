@@ -2,7 +2,7 @@ package org.folio.shared.index.api;
 
 public class OaiException extends RuntimeException {
 
-  private String errorCode;
+  private final String errorCode;
 
   public String getErrorCode() {
     return errorCode;

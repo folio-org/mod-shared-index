@@ -6,6 +6,7 @@ import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.validation.RequestParameters;
 import io.vertx.ext.web.validation.ValidationHandler;
 import io.vertx.sqlclient.Row;
+import io.vertx.sqlclient.RowIterator;
 import io.vertx.sqlclient.RowStream;
 import io.vertx.sqlclient.SqlConnection;
 import io.vertx.sqlclient.Transaction;
@@ -34,15 +35,19 @@ public final class OaiService {
           + "         http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd\">\n";
 
   static void oaiHeader(RoutingContext ctx, int httpStatus) {
+    RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     HttpServerResponse response = ctx.response();
     response.setChunked(true);
     response.setStatusCode(httpStatus);
     response.putHeader("Content-Type", "text/xml");
     response.write(OAI_HEADER);
     response.write("  <responseDate>" + Instant.now() + "</responseDate>\n");
-    response.write("  <request>"
-        + XmlJsonUtil.encodeXmlText(ctx.request().absoluteURI())
-        + "</request>\n");
+    response.write("  <request");
+    String verb = Util.getParameterString(params.queryParameter("verb"));
+    if (verb != null) {
+      response.write(" verb=\"" + XmlJsonUtil.encodeXmlText(verb) + "\"");
+    }
+    response.write(">" + XmlJsonUtil.encodeXmlText(ctx.request().absoluteURI()) + "</request>\n");
   }
 
   static void oaiFooter(RoutingContext ctx) {
@@ -78,9 +83,15 @@ public final class OaiService {
       if (verb == null) {
         throw OaiException.badVerb("missing verb");
       }
+      String metadataPrefix = Util.getParameterString(params.queryParameter("metadataPrefix"));
+      if (metadataPrefix != null && !"marcxml".equals(metadataPrefix)) {
+        throw OaiException.cannotDisseminateFormat("only metadataPrefix \"marcxml\" supported");
+      }
       switch (verb) {
+        case "ListIdentifiers":
+          return listRecords(ctx, false);
         case "ListRecords":
-          return listRecords(ctx);
+          return listRecords(ctx, true);
         case "GetRecord":
           return getRecord(ctx);
         default:
@@ -91,15 +102,11 @@ public final class OaiService {
     }
   }
 
-  static Future<Void> listRecords(RoutingContext ctx) {
+  static Future<Void> listRecords(RoutingContext ctx, boolean withMetadata) {
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     String set = Util.getParameterString(params.queryParameter("set"));
     if (set == null) {
       throw OaiException.badArgument("set or resumptionToken missing");
-    }
-    String metadataPrefix = Util.getParameterString(params.queryParameter("metadataPrefix"));
-    if (!"marcxml".equals(metadataPrefix)) {
-      throw OaiException.cannotDisseminateFormat("only metadataPrefix \"marcxml\" supported");
     }
     Storage storage = new Storage(ctx);
     return storage.selectMatchKeyConfig(set).compose(conf -> {
@@ -123,48 +130,56 @@ public final class OaiService {
         sqlQuery.append(" AND modified < $" + no);
       }
       return storage.getPool().getConnection().compose(conn ->
-          listRecordsResponse(ctx, storage, conn, sqlQuery.toString(), Tuple.from(tupleList))
+          listRecordsResponse(ctx, storage, conn, sqlQuery.toString(), Tuple.from(tupleList),
+              withMetadata)
       );
     });
   }
 
-  private static void endListResponse(RoutingContext ctx, SqlConnection conn, Transaction tx) {
-    ctx.response().write("  </ListRecords>\n");
+  private static void endListResponse(RoutingContext ctx, SqlConnection conn, Transaction tx,
+      String elem) {
+    ctx.response().write("  </" + elem + ">\n");
     oaiFooter(ctx);
     tx.commit().compose(y -> conn.close());
   }
 
+  static Future<String> getXmlRecordMetadata(Storage storage, SqlConnection conn, UUID clusterId) {
+    return Future.succeededFuture("");
+  }
+
   static Future<String> getXmlRecord(Storage storage, SqlConnection conn, UUID clusterId,
-      LocalDateTime datestamp) {
-    String xml = "    <record>\n"
-        + "      <header>\n"
-        + "        <identifier>"
-        // clusterId in itself is not a valid identifier
-        + XmlJsonUtil.encodeXmlText(clusterId.toString())
-        + "</identifier>\n"
-        + "        <datestamp>"
-        + XmlJsonUtil.encodeXmlText(datestamp.atZone(ZoneOffset.UTC).toString())
-        + "</datestamp>\n"
-        + "      </header>\n"
-        + "    </record>\n";
-    return Future.succeededFuture(xml);
+      LocalDateTime datestamp, boolean withMetadata) {
+    Future<String> metadataFuture = withMetadata
+        ? getXmlRecordMetadata(storage, conn, clusterId) : Future.succeededFuture("");
+    return metadataFuture.map(metadata ->
+        "    <record>\n"
+            + "      <header>\n"
+            + "        <identifier>"
+            // clusterId in itself is not a valid identifier
+            + XmlJsonUtil.encodeXmlText(clusterId.toString())
+            + "</identifier>\n"
+            + "        <datestamp>"
+            + XmlJsonUtil.encodeXmlText(datestamp.atZone(ZoneOffset.UTC).toString())
+            + "</datestamp>\n"
+            + "      </header>\n"
+            + metadata
+            + "    </record>\n");
   }
 
   static Future<Void> listRecordsResponse(RoutingContext ctx, Storage storage, SqlConnection conn,
-      String sqlQuery, Tuple tuple) {
+      String sqlQuery, Tuple tuple, boolean withMetadata) {
+    String elem = withMetadata ? "ListRecords" : "ListIdentifiers";
     return conn.prepare(sqlQuery).compose(pq ->
         conn.begin().compose(tx -> {
           HttpServerResponse response = ctx.response();
           oaiHeader(ctx, 200);
-          response.write("  <request verb=\"ListRecords\">");
-          response.write(XmlJsonUtil.encodeXmlText(ctx.request().absoluteURI()));
-          response.write("</request>\n");
-          response.write("  <ListRecords>\n");
+          response.write("  <" + elem + ">\n");
           RowStream<Row> stream = pq.createStream(100, tuple);
           stream.handler(row -> {
             stream.pause();
             getXmlRecord(storage, conn,
-                row.getUUID("cluster_id"), row.getLocalDateTime("datestamp"))
+                row.getUUID("cluster_id"), row.getLocalDateTime("datestamp"),
+                withMetadata)
                 .onSuccess(xmlRecord ->
                   response.write(xmlRecord).onComplete(x -> stream.resume())
                 )
@@ -174,10 +189,10 @@ public final class OaiService {
                   conn.close();
                 });
           });
-          stream.endHandler(end -> endListResponse(ctx, conn, tx));
+          stream.endHandler(end -> endListResponse(ctx, conn, tx, elem));
           stream.exceptionHandler(e -> {
             log.error("stream error {}", e.getMessage(), e);
-            endListResponse(ctx, conn, tx);
+            endListResponse(ctx, conn, tx, elem);
           });
           return Future.succeededFuture();
         })
@@ -185,7 +200,34 @@ public final class OaiService {
   }
 
   static Future<Void> getRecord(RoutingContext ctx) {
-    return Future.failedFuture("Not implemented");
+    RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
+    String identifier = Util.getParameterString(params.queryParameter("identifier"));
+    if (identifier == null) {
+      throw OaiException.badArgument("missing identifier");
+    }
+    UUID clusterId = UUID.fromString(identifier);
+    Storage storage = new Storage(ctx);
+    String sqlQuery = "SELECT * FROM " + storage.getClusterMetaTable() + " WHERE cluster_id = $1";
+    return storage.getPool()
+        .withConnection(conn -> conn.preparedQuery(sqlQuery)
+            .execute(Tuple.of(clusterId))
+            .compose(res -> {
+              RowIterator<Row> iterator = res.iterator();
+              if (!iterator.hasNext()) {
+                throw OaiException.idDoesNotExist(identifier);
+              }
+              Row row = iterator.next();
+              return getXmlRecord(storage, conn,
+                  row.getUUID("cluster_id"), row.getLocalDateTime("datestamp"),
+                  true)
+                  .map(xmlRecord -> {
+                    oaiHeader(ctx, 200);
+                    ctx.response().write("  <GetRecord>\n");
+                    ctx.response().write(xmlRecord);
+                    ctx.response().write("  </GetRecord>\n");
+                    oaiFooter(ctx);
+                    return null;
+                  });
+            }));
   }
-
 }
