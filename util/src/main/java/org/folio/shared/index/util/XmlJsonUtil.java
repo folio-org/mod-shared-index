@@ -45,6 +45,52 @@ public class XmlJsonUtil {
 
   private XmlJsonUtil() { }
 
+  /** Convert MARC-in-JSON to MARCXML.
+   *
+   * @param obj MARC-in-JSON object
+   * @return XML with record root element
+   */
+  public static String marcJsonToMarcXml(JsonObject obj) {
+    StringBuilder s = new StringBuilder();
+    s.append("<record xmlns=\"http://www.loc.gov/MARC21/slim\">\n");
+    s.append("<leader>" + encodeXmlText(obj.getString("leader")) + "</leader>\n");
+    JsonArray fields = obj.getJsonArray("fields");
+    for (int i = 0; i < fields.size(); i++) {
+      JsonObject control = fields.getJsonObject(i);
+      control.fieldNames().forEach(f -> {
+        Object value = control.getValue(f);
+        if (value instanceof String) {
+          s.append("<controlfield tag=\"");
+          s.append(encodeXmlText(f));
+          s.append("\">");
+          s.append(encodeXmlText((String) value));
+          s.append("</controlfield>\n");
+        }
+      });
+    }
+    for (int i = 0; i < fields.size(); i++) {
+      JsonObject control = fields.getJsonObject(i);
+      control.fieldNames().forEach(f -> {
+        Object value = control.getValue(f);
+        if (value instanceof JsonObject) {
+          JsonObject field = (JsonObject) value;
+          s.append("<datafield tag=\"");
+          s.append(encodeXmlText(f));
+          s.append("\" ind1 = \"");
+          s.append(encodeXmlText(field.getString("ind1")));
+          s.append("\" ind2 = \"");
+          s.append(encodeXmlText(field.getString("ind2")));
+          s.append("\">");
+          JsonArray subfields = field.getJsonArray("subfields");
+          // TODO subfields
+          s.append("</datafield>\n");
+        }
+      });
+    }
+    s.append("</record>\n");
+    return s.toString();
+  }
+
   /**
    * Convert MARCXML to MARC-in-JSON.
    * @param marcXml MARCXML XML string

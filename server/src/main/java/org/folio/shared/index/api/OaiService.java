@@ -2,6 +2,7 @@ package org.folio.shared.index.api;
 
 import io.vertx.core.Future;
 import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.validation.RequestParameters;
 import io.vertx.ext.web.validation.ValidationHandler;
@@ -143,8 +144,27 @@ public final class OaiService {
     tx.commit().compose(y -> conn.close());
   }
 
+  static String getMetadata(RowIterator<Row> iterator) {
+    JsonObject commonMarc = null;
+    while (iterator.hasNext()) {
+      Row row = iterator.next();
+      if (commonMarc == null) {
+        commonMarc = row.getJsonObject("marc_payload");
+      }
+      // TODO inventoryPayload inspection for holdings..
+    }
+    // TODO if commonMarc is null, it's a deleted record
+    String xmlMetadata = "";
+    return "    <metadata>\n" + xmlMetadata + "    </metadata>\n";
+  }
+
   static Future<String> getXmlRecordMetadata(Storage storage, SqlConnection conn, UUID clusterId) {
-    return Future.succeededFuture("");
+    String q = "SELECT * FROM " + storage.getBibRecordTable()
+        + " LEFT JOIN " + storage.getClusterRecordTable() + " ON record_id = id "
+        + " WHERE cluster_id = $1";
+    return conn.preparedQuery(q)
+        .execute(Tuple.of(clusterId))
+        .map(rowSet -> getMetadata(rowSet.iterator()));
   }
 
   static Future<String> getXmlRecord(Storage storage, SqlConnection conn, UUID clusterId,

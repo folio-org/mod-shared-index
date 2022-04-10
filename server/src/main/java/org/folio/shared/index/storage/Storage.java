@@ -74,6 +74,14 @@ public class Storage {
     return clusterMetaTable;
   }
 
+  public String getBibRecordTable() {
+    return bibRecordTable;
+  }
+
+  public String getClusterRecordTable() {
+    return clusterRecordTable;
+  }
+
   /**
    * Prepares storage with tables, etc.
    * @return async result.
