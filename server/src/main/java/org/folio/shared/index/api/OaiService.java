@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.UUID;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.folio.okapi.common.HttpResponse;
 import org.folio.shared.index.storage.Storage;
 import org.folio.shared.index.util.XmlJsonUtil;
 
@@ -27,37 +26,85 @@ public final class OaiService {
 
   private OaiService() { }
 
+  static final String OAI_HEADER =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+          + "<OAI-PMH xmlns=\"http://www.openarchives.org/OAI/2.0/\"\n"
+          + "         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n"
+          + "         xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/\n"
+          + "         http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd\">\n";
+
+  static void oaiHeader(RoutingContext ctx, int httpStatus) {
+    HttpServerResponse response = ctx.response();
+    response.setChunked(true);
+    response.setStatusCode(httpStatus);
+    response.putHeader("Content-Type", "text/xml");
+    response.write(OAI_HEADER);
+    response.write("  <responseDate>" + Instant.now() + "</responseDate>\n");
+    response.write("  <request>"
+        + XmlJsonUtil.encodeXmlText(ctx.request().absoluteURI())
+        + "</request>\n");
+  }
+
+  static void oaiFooter(RoutingContext ctx) {
+    HttpServerResponse response = ctx.response();
+    response.write("</OAI-PMH>");
+    response.end();
+  }
+
   static Future<Void> get(RoutingContext ctx) {
-    RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
-    String verb = Util.getParameterString(params.queryParameter("verb"));
-    switch (verb) {
-      case "ListRecords":
-        return listRecords(ctx);
-      case "GetRecord":
-        return getRecord(ctx);
-      default:
-        HttpResponse.responseError(ctx, 400, "OAI verb unsupported: " + verb);
+    return getCheck(ctx).recover(e -> {
+      if (ctx.response().headWritten()) {
+        return Future.succeededFuture();
+      }
+      String errorCode;
+      if (e instanceof OaiException) {
+        oaiHeader(ctx, 400);
+        errorCode = ((OaiException) e).getErrorCode();
+      } else {
+        oaiHeader(ctx, 500);
+        errorCode = "internal";
+      }
+      ctx.response().write("  <error code=\"" + errorCode + "\">"
+          + XmlJsonUtil.encodeXmlText(e.getMessage()) + "</error>\n");
+      oaiFooter(ctx);
+      return Future.succeededFuture();
+    });
+  }
+
+  static Future<Void> getCheck(RoutingContext ctx) {
+    try {
+      RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
+      String verb = Util.getParameterString(params.queryParameter("verb"));
+      if (verb == null) {
+        throw OaiException.badVerb("missing verb");
+      }
+      switch (verb) {
+        case "ListRecords":
+          return listRecords(ctx);
+        case "GetRecord":
+          return getRecord(ctx);
+        default:
+          throw OaiException.badVerb(verb);
+      }
+    } catch (Exception e) {
+      return Future.failedFuture(e);
     }
-    return Future.succeededFuture();
   }
 
   static Future<Void> listRecords(RoutingContext ctx) {
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     String set = Util.getParameterString(params.queryParameter("set"));
     if (set == null) {
-      HttpResponse.responseError(ctx, 400, "query parameter set missing from getRecords");
-      return Future.succeededFuture();
+      throw OaiException.badArgument("set or resumptionToken missing");
     }
     String metadataPrefix = Util.getParameterString(params.queryParameter("metadataPrefix"));
     if (!"marcxml".equals(metadataPrefix)) {
-      HttpResponse.responseError(ctx, 400, "only metadataPrefix \"marcxml\" supported");
-      return Future.succeededFuture();
+      throw OaiException.cannotDisseminateFormat("only metadataPrefix \"marcxml\" supported");
     }
     Storage storage = new Storage(ctx);
     return storage.selectMatchKeyConfig(set).compose(conf -> {
       if (conf == null) {
-        HttpResponse.responseError(ctx, 400, "set \"" + set + "\" not found");
-        return Future.succeededFuture();
+        throw OaiException.badArgument("set \"" + set + "\" not found");
       }
       List<Object> tupleList = new ArrayList<>();
       tupleList.add(set);
@@ -79,27 +126,6 @@ public final class OaiService {
           listRecordsResponse(ctx, storage, conn, sqlQuery.toString(), Tuple.from(tupleList))
       );
     });
-  }
-
-  static final String OAI_HEADER =
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-      + "<OAI-PMH xmlns=\"http://www.openarchives.org/OAI/2.0/\"\n"
-      + "         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n"
-      + "         xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/\n"
-      + "         http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd\">\n";
-
-  static void oaiHeader(RoutingContext ctx) {
-    HttpServerResponse response = ctx.response();
-    response.setChunked(true);
-    response.putHeader("Content-Type", "text/xml");
-    response.write(OAI_HEADER);
-    response.write("  <responseDate>" + Instant.now() + "</responseDate>\n");
-  }
-
-  static void oaiFooter(RoutingContext ctx) {
-    HttpServerResponse response = ctx.response();
-    response.write("</OAI-PMH>");
-    response.end();
   }
 
   private static void endListResponse(RoutingContext ctx, SqlConnection conn, Transaction tx) {
@@ -129,7 +155,7 @@ public final class OaiService {
     return conn.prepare(sqlQuery).compose(pq ->
         conn.begin().compose(tx -> {
           HttpServerResponse response = ctx.response();
-          oaiHeader(ctx);
+          oaiHeader(ctx, 200);
           response.write("  <request verb=\"ListRecords\">");
           response.write(XmlJsonUtil.encodeXmlText(ctx.request().absoluteURI()));
           response.write("</request>\n");

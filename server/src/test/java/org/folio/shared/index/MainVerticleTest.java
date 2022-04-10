@@ -13,7 +13,8 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.unit.TestContext;
 import io.vertx.ext.unit.junit.VertxUnitRunner;
-
+import io.vertx.ext.web.client.WebClient;
+import io.vertx.ext.web.client.predicate.ResponsePredicate;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,8 +25,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import io.vertx.ext.web.client.WebClient;
-import io.vertx.ext.web.client.predicate.ResponsePredicate;
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamConstants;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.folio.okapi.common.XOkapiHeaders;
@@ -39,11 +42,6 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.testcontainers.containers.PostgreSQLContainer;
-
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamConstants;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamReader;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
@@ -1283,22 +1281,8 @@ public class MainVerticleTest {
         .header(XOkapiHeaders.TENANT, tenant1)
         .get("/shared-index/oai")
         .then().statusCode(400)
-        .body(containsString("Missing parameter"));
-
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant1)
-        .param("set", "isbn")
-        .get("/shared-index/oai")
-        .then().statusCode(400)
-        .body(containsString("Missing parameter"));
-
-    RestAssured.given()
-        .header(XOkapiHeaders.TENANT, tenant1)
-        .param("verb", "GetRecord")
-        .param("metadataPrefix", "marcxml")
-        .get("/shared-index/oai")
-        .then().statusCode(400)
-        .body(containsString("Missing parameter"));
+        .contentType("text/xml")
+        .body(containsString("<error code=\"badVerb\">missing verb</error>"));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1307,7 +1291,36 @@ public class MainVerticleTest {
         .param("metadataPrefix", "marcxml")
         .get("/shared-index/oai")
         .then().statusCode(400)
-        .body(containsString("Validation error for parameter verb"));
+        .contentType("text/xml")
+        .body(containsString("<error code=\"badVerb\">noop</error>"));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("verb", "GetRecord")
+        .param("metadataPrefix", "marcxml")
+        .get("/shared-index/oai")
+        .then().statusCode(500)
+        .contentType("text/xml")
+        .body(containsString("<error code=\"internal\">Not implemented</error>"));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("set", "isbn")
+        .param("verb", "ListRecords")
+        .param("metadataPrefix", "badmetadataprefix")
+        .get("/shared-index/oai")
+        .then().statusCode(400)
+        .contentType("text/xml")
+        .body(containsString("<error code=\"cannotDisseminateFormat\">only metadataPrefix &quot;marcxml&quot; supported</error>"));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("verb", "ListRecords")
+        .param("metadataPrefix", "marcxml")
+        .get("/shared-index/oai")
+        .then().statusCode(400)
+        .contentType("text/xml")
+        .body(containsString("<error code=\"badArgument\">set or resumptionToken missing</error>"));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1316,7 +1329,8 @@ public class MainVerticleTest {
         .param("metadataPrefix", "marcxml")
         .get("/shared-index/oai")
         .then().statusCode(400)
-        .body(is("set \"isbn\" not found"));
+        .contentType("text/xml")
+        .body(containsString("<error code=\"badArgument\">set &quot;isbn&quot; not found</error>"));
   }
 
   @Test

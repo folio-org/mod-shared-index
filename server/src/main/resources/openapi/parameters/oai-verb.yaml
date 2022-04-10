@@ -1,7 +1,6 @@
 in: query
 name: verb
 description: OAI verb
-required: true
+required: false
 schema:
   type: string
-  enum: [ListRecords, Identify, GetRecord]
