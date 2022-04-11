@@ -50,44 +50,54 @@ public class XmlJsonUtil {
    * @param obj MARC-in-JSON object
    * @return XML with record root element
    */
-  public static String marcJsonToMarcXml(JsonObject obj) {
+  public static String convertJsonToMarcXml(JsonObject obj) {
     StringBuilder s = new StringBuilder();
-    s.append("<record xmlns=\"http://www.loc.gov/MARC21/slim\">\n");
-    s.append("<leader>" + encodeXmlText(obj.getString("leader")) + "</leader>\n");
+    s.append("<" + RECORD_LABEL + " xmlns=\"http://www.loc.gov/MARC21/slim\">\n");
+    String leader = obj.getString(LEADER_LABEL);
+    if (leader != null) {
+      s.append("  <" + LEADER_LABEL + ">" + encodeXmlText(leader) + "</" + LEADER_LABEL + ">\n");
+    }
     JsonArray fields = obj.getJsonArray("fields");
-    for (int i = 0; i < fields.size(); i++) {
-      JsonObject control = fields.getJsonObject(i);
-      control.fieldNames().forEach(f -> {
-        Object value = control.getValue(f);
-        if (value instanceof String) {
-          s.append("<controlfield tag=\"");
-          s.append(encodeXmlText(f));
-          s.append("\">");
-          s.append(encodeXmlText((String) value));
-          s.append("</controlfield>\n");
-        }
-      });
+    if (fields !=  null) {
+      for (int i = 0; i < fields.size(); i++) {
+        JsonObject control = fields.getJsonObject(i);
+        control.fieldNames().forEach(f -> {
+          Object fieldValue = control.getValue(f);
+          if (fieldValue instanceof String) {
+            s.append("  <" + CONTROLFIELD_LABEL + " tag=\"");
+            s.append(encodeXmlText(f));
+            s.append("\">");
+            s.append(encodeXmlText((String) fieldValue));
+            s.append("</controlfield>\n");
+          }
+          if (fieldValue instanceof JsonObject) {
+            JsonObject fieldObject = (JsonObject) fieldValue;
+            s.append("  <datafield tag=\"");
+            s.append(encodeXmlText(f));
+            for (int j = 1; j <= 9; j++) { // ISO 2709 allows more than 2 indicators
+              String indicatorValue = fieldObject.getString("ind" + j);
+              if (indicatorValue != null) {
+                s.append("\" ind" + j + "=\"");
+                s.append(encodeXmlText(indicatorValue));
+              }
+            }
+            s.append("\">\n");
+            JsonArray subfields = fieldObject.getJsonArray("subfields");
+            for (int j = 0; j < subfields.size(); j++) {
+              JsonObject subfieldObject = subfields.getJsonObject(j);
+              subfieldObject.fieldNames().forEach(sub -> {
+                s.append("    <" + SUBFIELD_LABEL);
+                s.append(" code=\"" + encodeXmlText(sub) + "\">");
+                s.append(subfieldObject.getString(sub));
+                s.append("</" + SUBFIELD_LABEL + ">\n");
+              });
+            }
+            s.append("  </datafield>\n");
+          }
+        });
+      }
     }
-    for (int i = 0; i < fields.size(); i++) {
-      JsonObject control = fields.getJsonObject(i);
-      control.fieldNames().forEach(f -> {
-        Object value = control.getValue(f);
-        if (value instanceof JsonObject) {
-          JsonObject field = (JsonObject) value;
-          s.append("<datafield tag=\"");
-          s.append(encodeXmlText(f));
-          s.append("\" ind1 = \"");
-          s.append(encodeXmlText(field.getString("ind1")));
-          s.append("\" ind2 = \"");
-          s.append(encodeXmlText(field.getString("ind2")));
-          s.append("\">");
-          JsonArray subfields = field.getJsonArray("subfields");
-          // TODO subfields
-          s.append("</datafield>\n");
-        }
-      });
-    }
-    s.append("</record>\n");
+    s.append("</record>");
     return s.toString();
   }
 
