@@ -205,18 +205,18 @@ public final class OaiService {
           response.write("  <" + elem + ">\n");
           RowStream<Row> stream = pq.createStream(100, tuple);
           stream.handler(row -> {
-              stream.pause();
-              getXmlRecord(storage, conn,
-                  row.getUUID("cluster_id"), row.getLocalDateTime("datestamp"),
-                  row.getString("match_key_config_id"), withMetadata)
-                  .onSuccess(xmlRecord ->
-                      response.write(xmlRecord).onComplete(x -> stream.resume())
-                  )
-                  .onFailure(e -> {
-                    log.info("failure {}", e.getMessage(), e);
-                    stream.close();
-                    conn.close();
-                  });
+            stream.pause();
+            getXmlRecord(storage, conn,
+                row.getUUID("cluster_id"), row.getLocalDateTime("datestamp"),
+                row.getString("match_key_config_id"), withMetadata)
+                .onSuccess(xmlRecord ->
+                    response.write(xmlRecord).onComplete(x -> stream.resume())
+                )
+                .onFailure(e -> {
+                  log.info("failure {}", e.getMessage(), e);
+                  stream.close();
+                  conn.close();
+                });
           });
           stream.endHandler(end -> endListResponse(ctx, conn, tx, elem));
           stream.exceptionHandler(e -> {
