@@ -156,6 +156,30 @@ public final class OaiService {
     tx.commit().compose(y -> conn.close());
   }
 
+  static void clearMarcField(JsonObject marc, String tag) {
+    JsonArray fields = marc.getJsonArray("fields");
+    if (fields == null) {
+      fields = new JsonArray();
+      marc.put("fields", fields);
+    }
+    int i = 0;
+    while (i < fields.size()) {
+      JsonObject field = fields.getJsonObject(i);
+      int cmp = 1;
+      for (String f : field.fieldNames()) {
+        cmp = tag.compareTo(f);
+        if (cmp == 0) {
+          break;
+        }
+      }
+      if (cmp == 0) {
+        fields.remove(i);
+      } else {
+        i++;
+      }
+    }
+  }
+
   static JsonArray updateMarcSubFields(JsonObject marc, String tag, String ind1, String ind2) {
     JsonArray fields = marc.getJsonArray("fields");
     if (fields == null) {
@@ -187,22 +211,6 @@ public final class OaiService {
     return subfields;
   }
 
-  static JsonArray updateMarcSubFields(JsonObject marc, String tag) {
-    return updateMarcSubFields(marc, tag, " ", " ");
-  }
-
-  static void populateMatchKeysInMarc(JsonObject marc, List<String> matchValues) {
-    JsonArray fields = updateMarcSubFields(marc,"99X");
-    for (String matchValue : matchValues) {
-      fields.add(new JsonObject().put("a", matchValue));
-    }
-  }
-
-  static void populateRecordIdentifierInMarc(JsonObject marc, UUID clusterId) {
-    JsonArray fields = updateMarcSubFields(marc,"999");
-    fields.add(new JsonObject().put("i", encodeOaiIdentifier(clusterId)));
-  }
-
   static void parseHoldingsRecords(JsonArray field, JsonObject inventoryPayload) {
     if (inventoryPayload == null) {
       return;
@@ -225,6 +233,11 @@ public final class OaiService {
     RowIterator<Row> iterator = rowSet.iterator();
     JsonObject marc = null;
     JsonArray holdings = new JsonArray();
+    JsonArray identifiersField = new JsonArray();
+    identifiersField.add(new JsonObject().put("i", encodeOaiIdentifier(clusterId)));
+    for (String matchValue : matchValues) {
+      identifiersField.add(new JsonObject().put("m", matchValue));
+    }
     while (iterator.hasNext()) {
       Row row = iterator.next();
       if (marc == null) {
@@ -232,12 +245,16 @@ public final class OaiService {
       }
       JsonObject inventoryPayload = row.getJsonObject("inventory_payload");
       parseHoldingsRecords(holdings, inventoryPayload);
+      identifiersField.add(new JsonObject()
+          .put("l", row.getString("local_id"))
+          .put("s", row.getUUID("source_id").toString())
+      );
     }
     if (marc == null) {
       return null; // a deleted record
     }
-    populateRecordIdentifierInMarc(marc, clusterId);
-    populateMatchKeysInMarc(marc, matchValues);
+    clearMarcField(marc, "999");
+    updateMarcSubFields(marc, "999", "1", "0").addAll(identifiersField);
     JsonArray f852 = updateMarcSubFields(marc, "852", "0", " ");
     f852.clear();
     f852.addAll(holdings);
