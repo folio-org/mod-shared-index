@@ -156,61 +156,6 @@ public final class OaiService {
     tx.commit().compose(y -> conn.close());
   }
 
-  static void clearMarcField(JsonObject marc, String tag) {
-    JsonArray fields = marc.getJsonArray("fields");
-    if (fields == null) {
-      fields = new JsonArray();
-      marc.put("fields", fields);
-    }
-    int i = 0;
-    while (i < fields.size()) {
-      JsonObject field = fields.getJsonObject(i);
-      int cmp = 1;
-      for (String f : field.fieldNames()) {
-        cmp = tag.compareTo(f);
-        if (cmp == 0) {
-          break;
-        }
-      }
-      if (cmp == 0) {
-        fields.remove(i);
-      } else {
-        i++;
-      }
-    }
-  }
-
-  static JsonArray updateMarcSubFields(JsonObject marc, String tag, String ind1, String ind2) {
-    JsonArray fields = marc.getJsonArray("fields");
-    if (fields == null) {
-      fields = new JsonArray();
-      marc.put("fields", fields);
-    }
-    int i;
-    for (i = 0; i < fields.size(); i++) {
-      JsonObject field = fields.getJsonObject(i);
-      int cmp = 1;
-      for (String f : field.fieldNames()) {
-        cmp = tag.compareTo(f);
-        if (cmp <= 0) {
-          break;
-        }
-      }
-      if (cmp == 0) {
-        return field.getJsonArray("subfields");
-      } else if (cmp < 0) {
-        break;
-      }
-    }
-    JsonObject field = new JsonObject();
-    fields.add(i, new JsonObject().put(tag, field));
-    field.put("ind1", ind1);
-    field.put("ind2", ind2);
-    JsonArray subfields = new JsonArray();
-    field.put("subfields", subfields);
-    return subfields;
-  }
-
   static void parseHoldingsRecords(JsonArray field, JsonObject inventoryPayload) {
     if (inventoryPayload == null) {
       return;
@@ -253,11 +198,9 @@ public final class OaiService {
     if (marc == null) {
       return null; // a deleted record
     }
-    clearMarcField(marc, "999");
-    updateMarcSubFields(marc, "999", "1", "0").addAll(identifiersField);
-    JsonArray f852 = updateMarcSubFields(marc, "852", "0", " ");
-    f852.clear();
-    f852.addAll(holdings);
+    XmlJsonUtil.removeMarcField(marc, "999");
+    XmlJsonUtil.createMarcDataField(marc, "999", "1", "0").addAll(identifiersField);
+    XmlJsonUtil.createMarcDataField(marc, "999", " ", " ").addAll(holdings);
     String xmlMetadata = XmlJsonUtil.convertJsonToMarcXml(marc);
     return "    <metadata>\n" + xmlMetadata + "\n    </metadata>\n";
   }

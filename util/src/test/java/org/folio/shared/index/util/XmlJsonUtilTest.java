@@ -16,6 +16,7 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.xml.sax.SAXException;
@@ -525,5 +526,66 @@ public class XmlJsonUtilTest {
       Assert.assertTrue(inventoryPayload.encodePrettily(), inventoryPayload.containsKey("holdingsRecords"));
       Assert.assertEquals("US-CSt", inventoryPayload.getString("institutionDeref"));
     }
+  }
+
+  @Test
+  public void removeMarcField1() {
+    JsonObject got = MARCJSON1_SAMPLE.copy();
+    XmlJsonUtil.removeMarcField(got, "999");
+    JsonObject exp = MARCJSON1_SAMPLE.copy();
+    Assert.assertEquals(exp, got);
+  }
+
+  @Test
+  public void removeMarcField2() {
+    JsonObject got = MARCJSON2_SAMPLE.copy();
+    XmlJsonUtil.removeMarcField(got, "300");
+    JsonObject exp = MARCJSON2_SAMPLE.copy();
+    Assert.assertEquals(exp, got);
+  }
+
+  @Test
+  public void removeMarcField3() {
+    JsonObject got = MARCJSON2_SAMPLE.copy();
+    XmlJsonUtil.removeMarcField(got, "245");
+    JsonObject exp = MARCJSON2_SAMPLE.copy();
+    exp.getJsonArray("fields").remove(2);
+    Assert.assertEquals(exp, got);
+  }
+
+  @Test
+  public void createMarcDataField1() {
+    JsonObject got = MARCJSON1_SAMPLE.copy();
+    JsonArray ar = XmlJsonUtil.createMarcDataField(got, "245", "1", "2");
+    JsonObject exp = MARCJSON1_SAMPLE.copy();
+    exp.put("fields", new JsonArray().add(new JsonObject()
+        .put("245", new JsonObject()
+            .put("ind1", "1")
+            .put("ind2", "2")
+            .put("subfields", new JsonArray())
+        )));
+    Assert.assertEquals(exp, got);
+  }
+
+  @Test
+  public void createMarcDataField2() {
+    JsonObject got = MARCJSON2_SAMPLE.copy();
+    XmlJsonUtil.createMarcDataField(got, "200", "1", "2");
+    XmlJsonUtil.createMarcDataField(got, "999", " ", " ");
+    JsonObject exp = MARCJSON2_SAMPLE.copy();
+    exp.getJsonArray("fields")
+        .add(2, new JsonObject()
+            .put("200", new JsonObject()
+                .put("ind1", "1")
+                .put("ind2", "2")
+                .put("subfields", new JsonArray())
+            ))
+        .add(new JsonObject()
+            .put("999", new JsonObject()
+                .put("ind1", " ")
+                .put("ind2", " ")
+                .put("subfields", new JsonArray())
+            ));
+    Assert.assertEquals(exp, got);
   }
 }
