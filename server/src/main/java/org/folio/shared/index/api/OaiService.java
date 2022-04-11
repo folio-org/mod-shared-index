@@ -2,12 +2,14 @@ package org.folio.shared.index.api;
 
 import io.vertx.core.Future;
 import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.validation.RequestParameters;
 import io.vertx.ext.web.validation.ValidationHandler;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowIterator;
+import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.RowStream;
 import io.vertx.sqlclient.SqlConnection;
 import io.vertx.sqlclient.Transaction;
@@ -16,6 +18,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import org.apache.logging.log4j.LogManager;
@@ -34,6 +37,15 @@ public final class OaiService {
           + "         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n"
           + "         xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/\n"
           + "         http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd\">\n";
+
+  static String encodeOaiIdentifier(UUID clusterId) {
+    return "oai:" + clusterId.toString();
+  }
+
+  static UUID decodeOaiIdentifier(String identifier) {
+    int off = identifier.indexOf(':');
+    return UUID.fromString(identifier.substring(off + 1));
+  }
 
   static void oaiHeader(RoutingContext ctx, int httpStatus) {
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
@@ -128,7 +140,7 @@ public final class OaiService {
       String until = Util.getParameterString(params.queryParameter("until"));
       if (until != null) {
         tupleList.add(LocalDateTime.parse(until));
-        sqlQuery.append(" AND modified < $" + no);
+        sqlQuery.append(" AND modified <= $" + no);
       }
       return storage.getPool().getConnection().compose(conn ->
           listRecordsResponse(ctx, storage, conn, sqlQuery.toString(), Tuple.from(tupleList),
@@ -144,44 +156,126 @@ public final class OaiService {
     tx.commit().compose(y -> conn.close());
   }
 
-  static String getMetadata(RowIterator<Row> iterator) {
-    JsonObject commonMarc = null;
+  static JsonArray updateMarcSubFields(JsonObject marc, String tag, String ind1, String ind2) {
+    JsonArray fields = marc.getJsonArray("fields");
+    if (fields == null) {
+      fields = new JsonArray();
+      marc.put("fields", fields);
+    }
+    int i;
+    for (i = 0; i < fields.size(); i++) {
+      JsonObject field = fields.getJsonObject(i);
+      int cmp = 1;
+      for (String f : field.fieldNames()) {
+        cmp = tag.compareTo(f);
+        if (cmp <= 0) {
+          break;
+        }
+      }
+      if (cmp == 0) {
+        return field.getJsonArray("subfields");
+      } else if (cmp < 0) {
+        break;
+      }
+    }
+    JsonObject field = new JsonObject();
+    fields.add(i, new JsonObject().put(tag, field));
+    field.put("ind1", ind1);
+    field.put("ind2", ind2);
+    JsonArray subfields = new JsonArray();
+    field.put("subfields", subfields);
+    return subfields;
+  }
+
+  static JsonArray updateMarcSubFields(JsonObject marc, String tag) {
+    return updateMarcSubFields(marc, tag, " ", " ");
+  }
+
+  static void populateMatchKeysInMarc(JsonObject marc, List<String> matchValues) {
+    JsonArray fields = updateMarcSubFields(marc,"99X");
+    for (String matchValue : matchValues) {
+      fields.add(new JsonObject().put("a", matchValue));
+    }
+  }
+
+  static void populateRecordIdentifierInMarc(JsonObject marc, UUID clusterId) {
+    JsonArray fields = updateMarcSubFields(marc,"999");
+    fields.add(new JsonObject().put("i", encodeOaiIdentifier(clusterId)));
+  }
+
+  static void parseHoldingsRecords(JsonArray field, JsonObject inventoryPayload) {
+    if (inventoryPayload == null) {
+      return;
+    }
+
+    JsonArray holdingsRecords = inventoryPayload.getJsonArray("holdingsRecords");
+    if (holdingsRecords == null) {
+      return;
+    }
+    for (int i = 0; i < holdingsRecords.size(); i++) {
+      JsonObject holdingsRecord = holdingsRecords.getJsonObject(i);
+      String permanentLocation = holdingsRecord.getString("permanentLocationDeref");
+      if (permanentLocation != null) {
+        field.add(new JsonObject().put("b", permanentLocation));
+      }
+    }
+  }
+
+  static String getMetadata(RowSet<Row> rowSet, UUID clusterId, List<String> matchValues) {
+    RowIterator<Row> iterator = rowSet.iterator();
+    JsonObject marc = null;
+    JsonArray holdings = new JsonArray();
     while (iterator.hasNext()) {
       Row row = iterator.next();
-      if (commonMarc == null) {
-        commonMarc = row.getJsonObject("marc_payload");
+      if (marc == null) {
+        marc = row.getJsonObject("marc_payload");
       }
-      // TODO inventoryPayload inspection for holdings..
+      JsonObject inventoryPayload = row.getJsonObject("inventory_payload");
+      parseHoldingsRecords(holdings, inventoryPayload);
     }
-    if (commonMarc == null) {
-      return null;
+    if (marc == null) {
+      return null; // a deleted record
     }
-    String xmlMetadata = XmlJsonUtil.convertJsonToMarcXml(commonMarc);
+    populateRecordIdentifierInMarc(marc, clusterId);
+    populateMatchKeysInMarc(marc, matchValues);
+    JsonArray f852 = updateMarcSubFields(marc, "852", "0", " ");
+    f852.clear();
+    f852.addAll(holdings);
+    String xmlMetadata = XmlJsonUtil.convertJsonToMarcXml(marc);
     return "    <metadata>\n" + xmlMetadata + "\n    </metadata>\n";
   }
 
-  static Future<String> getXmlRecordMetadata(Storage storage, SqlConnection conn, UUID clusterId) {
+  static Future<String> getXmlRecordMetadata(Storage storage, SqlConnection conn, UUID clusterId,
+      List<String> matchValues) {
     String q = "SELECT * FROM " + storage.getBibRecordTable()
         + " LEFT JOIN " + storage.getClusterRecordTable() + " ON record_id = id "
         + " WHERE cluster_id = $1";
     return conn.preparedQuery(q)
         .execute(Tuple.of(clusterId))
-        .map(rowSet -> getMetadata(rowSet.iterator()));
+        .map(rowSet -> getMetadata(rowSet, clusterId, matchValues));
   }
 
-  static String encodeOaiIdentifier(UUID clusterId) {
-    return "oai:" + clusterId.toString();
-  }
-
-  static UUID decodeOaiIdentifier(String identifier) {
-    int off = identifier.indexOf(':');
-    return UUID.fromString(identifier.substring(off + 1));
+  static Future<List<String>> getClusterValues(Storage storage, SqlConnection conn, UUID clusterId) {
+     return conn.preparedQuery("SELECT match_value FROM " + storage.getClusterValuesTable()
+         + " WHERE cluster_id = $1")
+         .execute(Tuple.of(clusterId))
+         .map(rowSet -> {
+           List<String> values = new ArrayList<>();
+           rowSet.forEach(row -> values.add(row.getString("match_value")));
+           return values;
+         });
   }
 
   static Future<String> getXmlRecord(Storage storage, SqlConnection conn, UUID clusterId,
       LocalDateTime datestamp, String oaiSet, boolean withMetadata) {
+    Future<List<String>> clusterValues = Future.succeededFuture(Collections.emptyList());
+    if (withMetadata) {
+      clusterValues = getClusterValues(storage, conn, clusterId);
+    }
     // When false withMetadata could optimize and not join with bibRecordTable
-    return getXmlRecordMetadata(storage, conn, clusterId).map(metadata ->
+    return clusterValues.compose(values -> getXmlRecordMetadata(storage, conn, clusterId,
+        values)
+        .map(metadata ->
         "    <record>\n"
             + "      <header" + (metadata == null ? " status=\"deleted\"" : "") + ">\n"
             + "        <identifier>"
@@ -191,8 +285,8 @@ public final class OaiService {
             + "</datestamp>\n"
             + "        <setSpec>" + XmlJsonUtil.encodeXmlText(oaiSet) + "</setSpec>\n"
             + "      </header>\n"
-            + (withMetadata ? metadata : "")
-            + "    </record>\n");
+            + (withMetadata && metadata != null ? metadata : "")
+            + "    </record>\n"));
   }
 
   static Future<Void> listRecordsResponse(RoutingContext ctx, Storage storage, SqlConnection conn,

@@ -82,6 +82,10 @@ public class Storage {
     return clusterRecordTable;
   }
 
+  public String getClusterValuesTable() {
+    return clusterValueTable;
+  }
+
   /**
    * Prepares storage with tables, etc.
    * @return async result.

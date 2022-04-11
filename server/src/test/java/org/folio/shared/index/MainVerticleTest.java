@@ -1329,6 +1329,7 @@ public class MainVerticleTest {
         .contentType("application/json")
         .body(Matchers.is(matchKey1.encode()));
 
+    List<String> identifiers = new LinkedList<>();
     String s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .param("set", "isbn")
@@ -1338,7 +1339,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    log.info("s = {}", s);
+    verifyOaiResponse(s, identifiers);
 
     JsonObject matchKey2 = new JsonObject()
         .put("id", "issn")
@@ -1365,6 +1366,10 @@ public class MainVerticleTest {
             .put("inventoryPayload", new JsonObject()
                 .put("isbn", new JsonArray().add("1"))
                 .put("issn", new JsonArray().add("01"))
+                .put("holdingsRecords", new JsonArray().add(new JsonObject()
+                        .put("permanentLocationDeref", "S101")
+                    )
+                )
             )
         )
         .add(new JsonObject()
@@ -1375,6 +1380,10 @@ public class MainVerticleTest {
             .put("inventoryPayload", new JsonObject()
                 .put("isbn", new JsonArray().add("2").add("3"))
                 .put("issn", new JsonArray().add("01"))
+                .put("holdingsRecords", new JsonArray().add(new JsonObject()
+                        .put("permanentLocationDeref", "S102")
+                    )
+                )
             )
         );
     ingestRecords(records1, sourceId1);
@@ -1388,10 +1397,21 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    List<String> identifiers = new LinkedList<>();
     verifyOaiResponse(s, identifiers, List.of("S101", "S102"));
+    log.info(" issn S = {}", s);
 
     s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("set", "issn")
+        .param("verb", "ListIdentifiers")
+        .param("metadataPrefix", "marcxml")
+        .get("/shared-index/oai")
+        .then().statusCode(200)
+        .contentType("text/xml")
+        .extract().body().asString();
+    verifyOaiResponse(s, identifiers, List.of("S101", "S102"));
+
+    RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .param("verb", "GetRecord")
         .param("metadataPrefix", "marcxml")
@@ -1400,6 +1420,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
+    verifyOaiResponse(s, identifiers, List.of("S101"));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1421,6 +1442,46 @@ public class MainVerticleTest {
         .contentType("text/xml")
         .extract().body().asString();
     verifyOaiResponse(s, identifiers, List.of("S101"), List.of("S102"));
+    log.info(" isbn S = {}", s);
+
+    JsonArray records2 = new JsonArray()
+        .add(new JsonObject()
+            .put("localId", "S103")
+            .put("marcPayload", new JsonObject()
+                .put("leader", "00914naa  2200337   450 ")
+            )
+            .put("inventoryPayload", new JsonObject()
+                .put("isbn", new JsonArray().add("1").add("2"))
+                .put("issn", new JsonArray().add("02"))
+                .put("holdingsRecords", new JsonArray().add(new JsonObject()
+                        .put("permanentLocationDeref", "S103")
+                    )
+                )
+            )
+        );
+    ingestRecords(records2, sourceId1);
+
+    s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("set", "isbn")
+        .param("verb", "ListRecords")
+        .param("metadataPrefix", "marcxml")
+        .get("/shared-index/oai")
+        .then().statusCode(200)
+        .contentType("text/xml")
+        .extract().body().asString();
+    verifyOaiResponse(s, identifiers, List.of("S101"), List.of(""));
+
+    s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("set", "isbn")
+        .param("verb", "ListIdentifiers")
+        .param("metadataPrefix", "marcxml")
+        .get("/shared-index/oai")
+        .then().statusCode(200)
+        .contentType("text/xml")
+        .extract().body().asString();
+    verifyOaiResponse(s, identifiers, List.of("S101"), List.of(""));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
