@@ -255,7 +255,8 @@ public final class OaiService {
         .map(rowSet -> getMetadata(rowSet, clusterId, matchValues));
   }
 
-  static Future<List<String>> getClusterValues(Storage storage, SqlConnection conn, UUID clusterId) {
+  static Future<List<String>> getClusterValues(Storage storage, SqlConnection conn,
+      UUID clusterId) {
     return conn.preparedQuery("SELECT match_value FROM " + storage.getClusterValuesTable()
             + " WHERE cluster_id = $1")
         .execute(Tuple.of(clusterId))
