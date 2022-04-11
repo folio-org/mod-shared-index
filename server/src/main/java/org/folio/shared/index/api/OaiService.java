@@ -256,14 +256,14 @@ public final class OaiService {
   }
 
   static Future<List<String>> getClusterValues(Storage storage, SqlConnection conn, UUID clusterId) {
-     return conn.preparedQuery("SELECT match_value FROM " + storage.getClusterValuesTable()
-         + " WHERE cluster_id = $1")
-         .execute(Tuple.of(clusterId))
-         .map(rowSet -> {
-           List<String> values = new ArrayList<>();
-           rowSet.forEach(row -> values.add(row.getString("match_value")));
-           return values;
-         });
+    return conn.preparedQuery("SELECT match_value FROM " + storage.getClusterValuesTable()
+            + " WHERE cluster_id = $1")
+        .execute(Tuple.of(clusterId))
+        .map(rowSet -> {
+          List<String> values = new ArrayList<>();
+          rowSet.forEach(row -> values.add(row.getString("match_value")));
+          return values;
+        });
   }
 
   static Future<String> getXmlRecord(Storage storage, SqlConnection conn, UUID clusterId,
