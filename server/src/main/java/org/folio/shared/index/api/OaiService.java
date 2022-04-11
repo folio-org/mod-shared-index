@@ -153,9 +153,11 @@ public final class OaiService {
       }
       // TODO inventoryPayload inspection for holdings..
     }
-    // TODO if commonMarc is null, it's a deleted record
-    String xmlMetadata = "";
-    return "    <metadata>\n" + xmlMetadata + "    </metadata>\n";
+    if (commonMarc == null) {
+      return null;
+    }
+    String xmlMetadata = XmlJsonUtil.convertJsonToMarcXml(commonMarc);
+    return "    <metadata>\n" + xmlMetadata + "\n    </metadata>\n";
   }
 
   static Future<String> getXmlRecordMetadata(Storage storage, SqlConnection conn, UUID clusterId) {
@@ -167,22 +169,29 @@ public final class OaiService {
         .map(rowSet -> getMetadata(rowSet.iterator()));
   }
 
+  static String encodeOaiIdentifier(UUID clusterId) {
+    return "oai:" + clusterId.toString();
+  }
+
+  static UUID decodeOaiIdentifier(String identifier) {
+    int off = identifier.indexOf(':');
+    return UUID.fromString(identifier.substring(off + 1));
+  }
+
   static Future<String> getXmlRecord(Storage storage, SqlConnection conn, UUID clusterId,
-      LocalDateTime datestamp, boolean withMetadata) {
-    Future<String> metadataFuture = withMetadata
-        ? getXmlRecordMetadata(storage, conn, clusterId) : Future.succeededFuture("");
-    return metadataFuture.map(metadata ->
+      LocalDateTime datestamp, String oaiSet, boolean withMetadata) {
+    // When false withMetadata could optimize and not join with bibRecordTable
+    return getXmlRecordMetadata(storage, conn, clusterId).map(metadata ->
         "    <record>\n"
-            + "      <header>\n"
+            + "      <header" + (metadata == null ? " status=\"deleted\"" : "") + ">\n"
             + "        <identifier>"
-            // clusterId in itself is not a valid identifier
-            + XmlJsonUtil.encodeXmlText(clusterId.toString())
-            + "</identifier>\n"
+            + XmlJsonUtil.encodeXmlText(encodeOaiIdentifier(clusterId)) + "</identifier>\n"
             + "        <datestamp>"
             + XmlJsonUtil.encodeXmlText(datestamp.atZone(ZoneOffset.UTC).toString())
             + "</datestamp>\n"
+            + "        <setSpec>" + XmlJsonUtil.encodeXmlText(oaiSet) + "</setSpec>\n"
             + "      </header>\n"
-            + metadata
+            + (withMetadata ? metadata : "")
             + "    </record>\n");
   }
 
@@ -196,18 +205,18 @@ public final class OaiService {
           response.write("  <" + elem + ">\n");
           RowStream<Row> stream = pq.createStream(100, tuple);
           stream.handler(row -> {
-            stream.pause();
-            getXmlRecord(storage, conn,
-                row.getUUID("cluster_id"), row.getLocalDateTime("datestamp"),
-                withMetadata)
-                .onSuccess(xmlRecord ->
-                  response.write(xmlRecord).onComplete(x -> stream.resume())
-                )
-                .onFailure(e -> {
-                  log.info("failure {}", e.getMessage(), e);
-                  stream.close();
-                  conn.close();
-                });
+              stream.pause();
+              getXmlRecord(storage, conn,
+                  row.getUUID("cluster_id"), row.getLocalDateTime("datestamp"),
+                  row.getString("match_key_config_id"), withMetadata)
+                  .onSuccess(xmlRecord ->
+                      response.write(xmlRecord).onComplete(x -> stream.resume())
+                  )
+                  .onFailure(e -> {
+                    log.info("failure {}", e.getMessage(), e);
+                    stream.close();
+                    conn.close();
+                  });
           });
           stream.endHandler(end -> endListResponse(ctx, conn, tx, elem));
           stream.exceptionHandler(e -> {
@@ -225,7 +234,7 @@ public final class OaiService {
     if (identifier == null) {
       throw OaiException.badArgument("missing identifier");
     }
-    UUID clusterId = UUID.fromString(identifier);
+    UUID clusterId = decodeOaiIdentifier(identifier);
     Storage storage = new Storage(ctx);
     String sqlQuery = "SELECT * FROM " + storage.getClusterMetaTable() + " WHERE cluster_id = $1";
     return storage.getPool()
@@ -239,7 +248,7 @@ public final class OaiService {
               Row row = iterator.next();
               return getXmlRecord(storage, conn,
                   row.getUUID("cluster_id"), row.getLocalDateTime("datestamp"),
-                  true)
+                  row.getString("match_key_config_id"), true)
                   .map(xmlRecord -> {
                     oaiHeader(ctx, 200);
                     ctx.response().write("  <GetRecord>\n");

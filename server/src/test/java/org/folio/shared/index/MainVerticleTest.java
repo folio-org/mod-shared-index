@@ -505,10 +505,12 @@ public class MainVerticleTest {
 
     identifiers.clear();
     int offset = 0;
+    int level = 0;
     while (xmlStreamReader.hasNext()) {
       int event = xmlStreamReader.next();
       if (event == XMLStreamConstants.START_ELEMENT) {
-        if ("record".equals(xmlStreamReader.getLocalName())) {
+        level++;
+        if ("record".equals(xmlStreamReader.getLocalName()) && level == 3) {
           offset++;
         }
         if ("identifier".equals(xmlStreamReader.getLocalName()) && xmlStreamReader.hasNext()) {
@@ -517,6 +519,8 @@ public class MainVerticleTest {
             identifiers.add(xmlStreamReader.getText());
           }
         }
+      } else if (event == XMLStreamConstants.END_ELEMENT) {
+        level--;
       }
     }
     Assert.assertEquals(s, localIds.length, offset);
@@ -1355,7 +1359,9 @@ public class MainVerticleTest {
     JsonArray records1 = new JsonArray()
         .add(new JsonObject()
             .put("localId", "S101")
-            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("marcPayload", new JsonObject()
+                .put("leader", "00914naa  2200337   450 ")
+            )
             .put("inventoryPayload", new JsonObject()
                 .put("isbn", new JsonArray().add("1"))
                 .put("issn", new JsonArray().add("01"))
@@ -1363,7 +1369,9 @@ public class MainVerticleTest {
         )
         .add(new JsonObject()
             .put("localId", "S102")
-            .put("marcPayload", new JsonObject().put("leader", "00914naa  2200337   450 "))
+            .put("marcPayload", new JsonObject()
+                .put("leader", "00914naa  2200337   450 ")
+            )
             .put("inventoryPayload", new JsonObject()
                 .put("isbn", new JsonArray().add("2").add("3"))
                 .put("issn", new JsonArray().add("01"))
