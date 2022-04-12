@@ -1,5 +1,8 @@
 package org.folio.shared.index.api;
 
+import static org.folio.shared.index.api.Util.parseFrom;
+import static org.folio.shared.index.api.Util.parseUntil;
+
 import io.vertx.core.Future;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.json.JsonArray;
@@ -17,6 +20,7 @@ import io.vertx.sqlclient.Tuple;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -72,6 +76,10 @@ public final class OaiService {
   static Future<Void> get(RoutingContext ctx) {
     return getCheck(ctx).recover(e -> {
       if (ctx.response().headWritten()) {
+        log.error(e.getMessage(), e);
+        if (!ctx.response().ended()) {
+          ctx.response().end();
+        }
         return Future.succeededFuture();
       }
       String errorCode;
@@ -79,6 +87,7 @@ public final class OaiService {
         oaiHeader(ctx, 400);
         errorCode = ((OaiException) e).getErrorCode();
       } else {
+        log.error(e.getMessage(), e);
         oaiHeader(ctx, 500);
         errorCode = "internal";
       }
@@ -101,6 +110,8 @@ public final class OaiService {
         throw OaiException.cannotDisseminateFormat("only metadataPrefix \"marcxml\" supported");
       }
       switch (verb) {
+        case "Identify":
+          return identify(ctx);
         case "ListIdentifiers":
           return listRecords(ctx, false);
         case "ListRecords":
@@ -115,8 +126,34 @@ public final class OaiService {
     }
   }
 
+  static Future<Void> identify(RoutingContext ctx) {
+    oaiHeader(ctx, 200);
+    JsonObject config = ctx.vertx().getOrCreateContext().config();
+    HttpServerResponse response = ctx.response();
+    response.write("  <Identify>\n");
+    response.write("    <repositoryName>");
+    response.write(XmlJsonUtil.encodeXmlText(
+        config.getString("repositoryName", "repositoryName unspecified")));
+    response.write("    </repositoryName>\n");
+    response.write("    <baseURL>");
+    response.write(XmlJsonUtil.encodeXmlText(
+        config.getString("baseURL", "baseURL unspecified")));
+    response.write("    </baseURL>\n");
+    response.write("    <protocolVersion>2.0</protocolVersion>\n");
+    response.write("    <adminEmail>");
+    response.write(XmlJsonUtil.encodeXmlText(
+        config.getString("adminEmail", "adminEmail unspecified")));
+    response.write("    </adminEmail>\n");
+    response.write("    <deletedRecord>persistent</deletedRecord>\n");
+    response.write("    <granularity>YYYY-MM-DDThh:mm:ssZ</granularity>\n");
+    response.write("  </Identify>\n");
+    oaiFooter(ctx);
+    return Future.succeededFuture();
+  }
+
   static Future<Void> listRecords(RoutingContext ctx, boolean withMetadata) {
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
+    // TODO resumptionToken handling
     String set = Util.getParameterString(params.queryParameter("set"));
     if (set == null) {
       throw OaiException.badArgument("set or resumptionToken missing");
@@ -133,15 +170,16 @@ public final class OaiService {
       String from = Util.getParameterString(params.queryParameter("from"));
       int no = 2;
       if (from != null) {
-        tupleList.add(LocalDateTime.parse(from));
-        sqlQuery.append(" AND modified >= $" + no);
+        tupleList.add(parseFrom(from));
+        sqlQuery.append(" AND datestamp >= $" + no);
         no++;
       }
       String until = Util.getParameterString(params.queryParameter("until"));
       if (until != null) {
-        tupleList.add(LocalDateTime.parse(until));
-        sqlQuery.append(" AND modified <= $" + no);
+        tupleList.add(parseUntil(until));
+        sqlQuery.append(" AND datestamp < $" + no);
       }
+      sqlQuery.append(" ORDER BY datestamp");
       return storage.getPool().getConnection().compose(conn ->
           listRecordsResponse(ctx, storage, conn, sqlQuery.toString(), Tuple.from(tupleList),
               withMetadata)
@@ -174,12 +212,25 @@ public final class OaiService {
     }
   }
 
+  /**
+   * Construct metadata record XML string.
+   *
+   * <p>999 ind1=1 ind2=0 has identifiers for the record. $i cluster UUID; multiple $m for each
+   * match value; Multiple $l, $s pairs for local identifier and source identifiers.
+   *
+   * <p>999 ind1=0 ind2=0 has holding information. Not complete yet.
+   *
+   * @param rowSet bib_record rowSet (empty if no record entries: deleted)
+   * @param clusterId cluster identifier that this record is part of
+   * @param matchValues match values for this cluster
+   * @return
+   */
   static String getMetadata(RowSet<Row> rowSet, UUID clusterId, List<String> matchValues) {
     RowIterator<Row> iterator = rowSet.iterator();
     JsonObject marc = null;
     JsonArray holdings = new JsonArray();
     JsonArray identifiersField = new JsonArray();
-    identifiersField.add(new JsonObject().put("i", encodeOaiIdentifier(clusterId)));
+    identifiersField.add(new JsonObject().put("i", clusterId.toString()));
     for (String matchValue : matchValues) {
       identifiersField.add(new JsonObject().put("m", matchValue));
     }
@@ -200,7 +251,7 @@ public final class OaiService {
     }
     XmlJsonUtil.removeMarcField(marc, "999");
     XmlJsonUtil.createMarcDataField(marc, "999", "1", "0").addAll(identifiersField);
-    XmlJsonUtil.createMarcDataField(marc, "999", " ", " ").addAll(holdings);
+    XmlJsonUtil.createMarcDataField(marc, "999", "0", "0").addAll(holdings);
     String xmlMetadata = XmlJsonUtil.convertJsonToMarcXml(marc);
     return "    <metadata>\n" + xmlMetadata + "\n    </metadata>\n";
   }
@@ -237,17 +288,18 @@ public final class OaiService {
     return clusterValues.compose(values -> getXmlRecordMetadata(storage, conn, clusterId,
         values)
         .map(metadata ->
-        "    <record>\n"
-            + "      <header" + (metadata == null ? " status=\"deleted\"" : "") + ">\n"
-            + "        <identifier>"
-            + XmlJsonUtil.encodeXmlText(encodeOaiIdentifier(clusterId)) + "</identifier>\n"
-            + "        <datestamp>"
-            + XmlJsonUtil.encodeXmlText(datestamp.atZone(ZoneOffset.UTC).toString())
-            + "</datestamp>\n"
-            + "        <setSpec>" + XmlJsonUtil.encodeXmlText(oaiSet) + "</setSpec>\n"
-            + "      </header>\n"
-            + (withMetadata && metadata != null ? metadata : "")
-            + "    </record>\n"));
+            "    <record>\n"
+                + "      <header" + (metadata == null ? " status=\"deleted\"" : "") + ">\n"
+                + "        <identifier>"
+                + XmlJsonUtil.encodeXmlText(encodeOaiIdentifier(clusterId)) + "</identifier>\n"
+                + "        <datestamp>"
+                + XmlJsonUtil.encodeXmlText(
+                datestamp.atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toString())
+                + "</datestamp>\n"
+                + "        <setSpec>" + XmlJsonUtil.encodeXmlText(oaiSet) + "</setSpec>\n"
+                + "      </header>\n"
+                + (withMetadata && metadata != null ? metadata : "")
+                + "    </record>\n"));
   }
 
   static Future<Void> listRecordsResponse(RoutingContext ctx, Storage storage, SqlConnection conn,
@@ -260,6 +312,7 @@ public final class OaiService {
           response.write("  <" + elem + ">\n");
           RowStream<Row> stream = pq.createStream(100, tuple);
           stream.handler(row -> {
+            // TODO stop at a large number of records, say 100,000 and return resumptionToken
             stream.pause();
             getXmlRecord(storage, conn,
                 row.getUUID("cluster_id"), row.getLocalDateTime("datestamp"),

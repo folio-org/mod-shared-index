@@ -113,6 +113,8 @@ public class Storage {
                 + " datestamp TIMESTAMP,"
                 + " FOREIGN KEY(match_key_config_id) REFERENCES " + matchKeyConfigTable
                 + " ON DELETE CASCADE)",
+            "CREATE INDEX IF NOT EXISTS cluster_meta_datestamp_idx ON "
+                + clusterMetaTable + "(datestamp)",
             CREATE_IF_NO_EXISTS + clusterRecordTable
                 + "(record_id uuid NOT NULL,"
                 + " match_key_config_id VARCHAR NOT NULL,"
