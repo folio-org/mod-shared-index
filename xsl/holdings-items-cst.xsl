@@ -27,6 +27,7 @@
   <xsl:template match="//marc:record">
     <xsl:variable name="mt" select="substring(./marc:leader, 7, 1)"/>
     <xsl:variable name="bl" select="substring(./marc:leader, 8, 1)"/>
+    <xsl:variable name="inst-id" select="./marc:controlfield[@tag='001']"/>
     <holdingsRecords>
       <arr>
       <xsl:if test="marc:datafield[@tag='999']">
@@ -39,25 +40,20 @@
           <xsl:variable name="loc" select="./marc:subfield[@code='l']"/>
           <xsl:if test="not($loc=$preloc)">
             <i>
+              <institutionSymbol>US-CSt</institutionSymbol>
+              <instanceIdentifier>
+                <xsl:value-of select="$inst-id"/>
+              </instanceIdentifier>
               <xsl:variable name="loc-clean" select="normalize-space($loc)"/>
               <permanentLocationDeref><xsl:value-of select="$loc-clean"/></permanentLocationDeref>
               <illPolicyDeref>
                 <xsl:choose>
-                  <xsl:when test="$loc-clean='xxxx'">Will lend</xsl:when>
+                  <xsl:when test="$loc-clean='STACKS'">Will lend</xsl:when>
                   <xsl:otherwise>Will not lend</xsl:otherwise>
                 </xsl:choose>
               </illPolicyDeref>
               <callNumber><xsl:value-of select="./marc:subfield[@code='a']"/></callNumber>
               <callNumberTypeDeref>Library of Congress classification</callNumberTypeDeref> <!-- LC -->
-              <notes>
-                <arr>
-                  <i>
-                    <note><xsl:value-of select="concat('Location code: ', $loc-clean)"/></note>
-                    <holdingsNoteTypeDeref>Note</holdingsNoteTypeDeref>
-                    <staffOnly>true</staffOnly>
-                  </i>
-                </arr>
-              </notes>
               <items>
                 <arr>
                 <xsl:for-each select="../marc:datafield[@tag='999']/marc:subfield[@code='l'][.=$loc]/..">
