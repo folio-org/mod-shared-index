@@ -190,19 +190,20 @@ public class Storage {
     if ("manual".equals(update)) {
       return Future.succeededFuture();
     }
-    String matchKeyConfigId = matchKeyConfig.getString("id");
     String methodName = matchKeyConfig.getString("method");
     MatchKeyMethod method = MatchKeyMethod.get(methodName);
     if (method == null) {
       return Future.failedFuture("Unknown match key method: " + methodName);
     }
     method.configure(matchKeyConfig.getJsonObject("params"));
-    List<String> keys = method.getKeys(marcPayload, inventoryPayload);
+    Set<String> keys = new HashSet<>();
+    method.getKeys(marcPayload, inventoryPayload, keys);
+    String matchKeyConfigId = matchKeyConfig.getString("id");
     return updateMatchKeyValues(conn, globalId, matchKeyConfigId, keys);
   }
 
   Future<Void> updateMatchKeyValues(SqlConnection conn, UUID globalId,
-      String matchKeyConfigId, List<String> keys) {
+      String matchKeyConfigId, Collection<String> keys) {
 
     return updateClusterForRecord(conn, globalId, matchKeyConfigId, keys);
   }
@@ -606,8 +607,9 @@ public class Storage {
             count.incrementAndGet();
 
             UUID globalId = row.getUUID("id");
-            List<String> keys = method.getKeys(row.getJsonObject("marc_payload"),
-                row.getJsonObject("inventory_payload"));
+            Set<String> keys = new HashSet<>();
+            method.getKeys(row.getJsonObject("marc_payload"),
+                row.getJsonObject("inventory_payload"), keys);
             updateMatchKeyValues(connection, globalId, matchKeyConfigId, keys)
                 .onFailure(e -> log.error(e.getMessage(), e))
                 .onComplete(e -> stream.resume());
