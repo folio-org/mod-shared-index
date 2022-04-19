@@ -18,7 +18,12 @@ public final class Util {
     return Util.getParameterString(params.queryParameter("query"));
   }
 
-  private static LocalDateTime parseIso(String s) {
+  /**
+   * Parse ISO time.
+   * @param s time string
+   * @return local date time
+   */
+  public static LocalDateTime parseIso(String s) {
     return LocalDateTime.parse(s, DateTimeFormatter.ISO_DATE_TIME);
   }
 
@@ -55,5 +60,4 @@ public final class Util {
       throw OaiException.badArgument("bad until " + until + ":" + e.getMessage());
     }
   }
-
 }

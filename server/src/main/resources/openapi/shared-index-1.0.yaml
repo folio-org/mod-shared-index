@@ -446,6 +446,7 @@ paths:
       - $ref: headers/okapi-url.yaml
       - $ref: parameters/oai-identifier.yaml
       - $ref: parameters/oai-from.yaml
+      - $ref: parameters/oai-list-limit.yaml
       - $ref: parameters/oai-until.yaml
       - $ref: parameters/oai-resumptionToken.yaml
       - $ref: parameters/oai-set.yaml

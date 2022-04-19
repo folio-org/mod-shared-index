@@ -505,7 +505,7 @@ public class MainVerticleTest {
     }
   }
 
-  static void verifyOaiResponse(String s, String envelope, List<String> identifiers, List<String> ... localIds) throws XMLStreamException {
+  static void verifyOaiResponse(String s, String envelope, List<String> identifiers, int length) throws XMLStreamException {
     InputStream stream = new ByteArrayInputStream(s.getBytes());
     XMLInputFactory factory = XMLInputFactory.newInstance();
     XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
@@ -539,7 +539,9 @@ public class MainVerticleTest {
         level--;
       }
     }
-    Assert.assertEquals(s, localIds.length, offset);
+    if (length != -1) {
+      Assert.assertEquals(s, length, offset);
+    }
     Assert.assertTrue(s, foundEnvelope);
   }
 
@@ -1405,7 +1407,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    verifyOaiResponse(s, "Identify", identifiers);
+    verifyOaiResponse(s, "Identify", identifiers, 0);
   }
 
   @Test
@@ -1435,7 +1437,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    verifyOaiResponse(s, "ListRecords", identifiers);
+    verifyOaiResponse(s, "ListRecords", identifiers, 0);
 
     JsonObject matchKey2 = new JsonObject()
         .put("id", "issn")
@@ -1493,7 +1495,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    verifyOaiResponse(s, "ListRecords", identifiers, List.of("S101", "S102"));
+    verifyOaiResponse(s, "ListRecords", identifiers, 1);
     log.info(" issn S = {}", s);
 
     s = RestAssured.given()
@@ -1505,7 +1507,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    verifyOaiResponse(s, "ListIdentifiers", identifiers, List.of("S101", "S102"));
+    verifyOaiResponse(s, "ListIdentifiers", identifiers, 1);
 
     s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1516,7 +1518,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    verifyOaiResponse(s, "GetRecord", identifiers, List.of("S101"));
+    verifyOaiResponse(s, "GetRecord", identifiers, 1);
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1537,7 +1539,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    verifyOaiResponse(s, "ListRecords", identifiers, List.of("S101"), List.of("S102"));
+    verifyOaiResponse(s, "ListRecords", identifiers, 2);
     log.info(" isbn S = {}", s);
 
     JsonArray records2 = new JsonArray()
@@ -1566,7 +1568,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    verifyOaiResponse(s, "ListRecords", identifiers, List.of("S101"), List.of(""));
+    verifyOaiResponse(s, "ListRecords", identifiers, 2);
 
     s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1577,7 +1579,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    verifyOaiResponse(s, "ListIdentifiers", identifiers, List.of("S101"), List.of(""));
+    verifyOaiResponse(s, "ListIdentifiers", identifiers, 2);
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1649,7 +1651,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    verifyOaiResponse(s, "ListRecords", identifiers, List.of("S101"));
+    verifyOaiResponse(s, "ListRecords", identifiers, 1);
 
     s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1660,7 +1662,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    verifyOaiResponse(s, "ListRecords", identifiers);
+    verifyOaiResponse(s, "ListRecords", identifiers, 0);
 
     s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1671,7 +1673,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    verifyOaiResponse(s, "ListRecords", identifiers);
+    verifyOaiResponse(s, "ListRecords", identifiers, 0);
 
     ingestRecords(records1, sourceId1);
     s = RestAssured.given()
@@ -1683,7 +1685,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    verifyOaiResponse(s, "ListRecords", identifiers, List.of("S101"));
+    verifyOaiResponse(s, "ListRecords", identifiers, 1);
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1706,6 +1708,60 @@ public class MainVerticleTest {
         .header(XOkapiHeaders.TENANT, tenant1)
         .delete("/shared-index/config/matchkeys/isbn")
         .then().statusCode(204);
+  }
+
+  @Test
+  public void testOaiResumptionToken() throws XMLStreamException, InterruptedException {
+    JsonObject matchKey1 = new JsonObject()
+        .put("id", "isbn")
+        .put("method", "jsonpath")
+        // update = ingest is the default
+        .put("params", new JsonObject().put("inventory", "$.isbn[*]"));
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .body(matchKey1.encode())
+        .post("/shared-index/config/matchkeys")
+        .then().statusCode(201)
+        .contentType("application/json")
+        .body(Matchers.is(matchKey1.encode()));
+
+    String sourceId1 = UUID.randomUUID().toString();
+    for (int i = 0; i < 10; i++) {
+      JsonArray records1 = new JsonArray()
+          .add(new JsonObject()
+              .put("localId", "S" + i)
+              .put("marcPayload", new JsonObject().put("leader", "00914naa  0101   450 "))
+              .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add(Integer.toString(i))))
+          );
+      ingestRecords(records1, sourceId1);
+      TimeUnit.MILLISECONDS.sleep(1);
+    }
+    List<String> identifiers = new LinkedList<>();
+    String s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("verb", "ListRecords")
+        .param("list-limit", "2")
+        .param("metadataPrefix", "marcxml")
+        .get("/shared-index/oai")
+        .then().statusCode(200)
+        .contentType("text/xml")
+        .extract().body().asString();
+    verifyOaiResponse(s, "ListRecords", identifiers, -1);
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .header("Content-Type", "application/json")
+        .param("query", "cql.allRecords=true")
+        .delete("/shared-index/records")
+        .then().statusCode(204);
+
+    RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .delete("/shared-index/config/matchkeys/isbn")
+        .then().statusCode(204);
+
   }
 
   @Test

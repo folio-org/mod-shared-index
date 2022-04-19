@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.folio.shared.index.storage.Storage;
@@ -153,8 +154,14 @@ public final class OaiService {
 
   static Future<Void> listRecords(RoutingContext ctx, boolean withMetadata) {
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
-    // TODO resumptionToken handling
-    String set = Util.getParameterString(params.queryParameter("set"));
+    String coded = Util.getParameterString(params.queryParameter("resumptionToken"));
+    ResumptionToken token = coded != null ? new ResumptionToken(coded) : null;
+    String set = token != null
+        ? token.getSet() : Util.getParameterString(params.queryParameter("set"));
+    String from = Util.getParameterString(params.queryParameter("from"));
+    String until = token != null
+        ? token.getUntil() : Util.getParameterString(params.queryParameter("until"));
+    Integer limit = params.queryParameter("list-limit").getInteger();
     Storage storage = new Storage(ctx);
     return storage.selectMatchKeyConfig(set).compose(conf -> {
       if (conf == null) {
@@ -164,22 +171,25 @@ public final class OaiService {
       tupleList.add(conf.getString("id"));
       StringBuilder sqlQuery = new StringBuilder("SELECT * FROM " + storage.getClusterMetaTable()
           + " WHERE match_key_config_id = $1");
-      String from = Util.getParameterString(params.queryParameter("from"));
       int no = 2;
-      if (from != null) {
+      if (token != null) {
+        tupleList.add(token.getFrom());
+        sqlQuery.append(" AND datestamp >= $" + no);
+        no++;
+      } else if (from != null) {
         tupleList.add(parseFrom(from));
         sqlQuery.append(" AND datestamp >= $" + no);
         no++;
       }
-      String until = Util.getParameterString(params.queryParameter("until"));
       if (until != null) {
         tupleList.add(parseUntil(until));
         sqlQuery.append(" AND datestamp < $" + no);
       }
+      ResumptionToken resumptionToken = new ResumptionToken(conf.getString("id"), until);
       sqlQuery.append(" ORDER BY datestamp");
       return storage.getPool().getConnection().compose(conn ->
           listRecordsResponse(ctx, storage, conn, sqlQuery.toString(), Tuple.from(tupleList),
-              withMetadata)
+              limit, withMetadata, resumptionToken)
       );
     });
   }
@@ -299,18 +309,37 @@ public final class OaiService {
                 + "    </record>\n"));
   }
 
+  static void writeResumptionToken(RoutingContext ctx, ResumptionToken token) {
+    HttpServerResponse response = ctx.response();
+    response.write("    <resumptionToken>");
+    response.write(XmlJsonUtil.encodeXmlText(token.encode()));
+    response.write("</resumptionToken>\n");
+  }
+
   static Future<Void> listRecordsResponse(RoutingContext ctx, Storage storage, SqlConnection conn,
-      String sqlQuery, Tuple tuple, boolean withMetadata) {
+      String sqlQuery, Tuple tuple, Integer limit, boolean withMetadata, ResumptionToken token) {
     String elem = withMetadata ? "ListRecords" : "ListIdentifiers";
+
     return conn.prepare(sqlQuery).compose(pq ->
         conn.begin().compose(tx -> {
           HttpServerResponse response = ctx.response();
           oaiHeader(ctx, 200);
           response.write("  <" + elem + ">\n");
           RowStream<Row> stream = pq.createStream(100, tuple);
+          AtomicInteger cnt = new AtomicInteger();
           stream.handler(row -> {
-            // TODO stop at a large number of records, say 100,000 and return resumptionToken
             stream.pause();
+            LocalDateTime datestamp = row.getLocalDateTime("datestamp");
+            if (token.getFrom() == null || datestamp.isAfter(token.getFrom())) {
+              token.setFrom(datestamp);
+              if (cnt.get() >= limit) {
+                writeResumptionToken(ctx, token);
+                stream.close();
+                endListResponse(ctx, conn, tx, elem);
+                return;
+              }
+            }
+            cnt.incrementAndGet();
             getXmlRecord(storage, conn,
                 row.getUUID("cluster_id"), row.getLocalDateTime("datestamp"),
                 row.getString("match_key_config_id"), withMetadata)
