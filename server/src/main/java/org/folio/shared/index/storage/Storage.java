@@ -539,13 +539,18 @@ public class Storage {
 
   /**
    * Select match key from storage.
-   * @param id match key id (user specified)
+   * @param id match key id; null takes any first config
    * @return JSON object if found; null if not found
    */
   public Future<JsonObject> selectMatchKeyConfig(String id) {
-    return pool.preparedQuery(
-            "SELECT * FROM " + matchKeyConfigTable + " WHERE id = $1")
-        .execute(Tuple.of(id))
+    String q = "SELECT * FROM " + matchKeyConfigTable;
+    List<String> tupleList = new ArrayList<>();
+    if (id != null) {
+      q = q + " WHERE id = $1";
+      tupleList.add(id);
+    }
+    return pool.preparedQuery(q)
+        .execute(Tuple.from(tupleList))
         .map(res -> {
           RowIterator<Row> iterator = res.iterator();
           if (!iterator.hasNext()) {

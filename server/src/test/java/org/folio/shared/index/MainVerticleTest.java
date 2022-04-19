@@ -1382,7 +1382,7 @@ public class MainVerticleTest {
         .get("/shared-index/oai")
         .then().statusCode(400)
         .contentType("text/xml")
-        .body(containsString("<error code=\"badArgument\">set or resumptionToken missing</error>"));
+        .body(containsString("<error code=\"badArgument\">set &quot;null&quot; not found</error>"));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1641,7 +1641,6 @@ public class MainVerticleTest {
 
     s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
-        .param("set", "isbn")
         .param("verb", "ListRecords")
         .param("from", time1)
         .param("until", time2)
@@ -1654,7 +1653,6 @@ public class MainVerticleTest {
 
     s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
-        .param("set", "isbn")
         .param("verb", "ListRecords")
         .param("until", time0)
         .param("metadataPrefix", "marcxml")
@@ -1666,7 +1664,6 @@ public class MainVerticleTest {
 
     s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
-        .param("set", "isbn")
         .param("verb", "ListRecords")
         .param("from", time3)
         .param("metadataPrefix", "marcxml")
@@ -1679,7 +1676,6 @@ public class MainVerticleTest {
     ingestRecords(records1, sourceId1);
     s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
-        .param("set", "isbn")
         .param("verb", "ListRecords")
         .param("from", time3)
         .param("metadataPrefix", "marcxml")
@@ -1691,7 +1687,6 @@ public class MainVerticleTest {
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
-        .param("set", "isbn")
         .param("verb", "ListRecords")
         .param("from", "xxxx")
         .param("metadataPrefix", "marcxml")

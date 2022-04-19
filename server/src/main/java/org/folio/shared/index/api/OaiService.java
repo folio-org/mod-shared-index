@@ -155,16 +155,13 @@ public final class OaiService {
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     // TODO resumptionToken handling
     String set = Util.getParameterString(params.queryParameter("set"));
-    if (set == null) {
-      throw OaiException.badArgument("set or resumptionToken missing");
-    }
     Storage storage = new Storage(ctx);
     return storage.selectMatchKeyConfig(set).compose(conf -> {
       if (conf == null) {
         throw OaiException.badArgument("set \"" + set + "\" not found");
       }
       List<Object> tupleList = new ArrayList<>();
-      tupleList.add(set);
+      tupleList.add(conf.getString("id"));
       StringBuilder sqlQuery = new StringBuilder("SELECT * FROM " + storage.getClusterMetaTable()
           + " WHERE match_key_config_id = $1");
       String from = Util.getParameterString(params.queryParameter("from"));
