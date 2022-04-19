@@ -251,6 +251,7 @@ public class Storage {
                 log.error("addValuesToCluster fails 3 times {}", e.getMessage(), e);
                 return Future.failedFuture("addValuesToCluster fails 3 times: " + e.getMessage());
               }
+              log.warn("addValuesToCluster iter={} {}", iterations, e.getMessage(), e);
               return updateClusterValues(conn,  iterations + 1, newClusterId, matchKeyConfigId,
                   keys, clustersFound);
             });
