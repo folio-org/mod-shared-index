@@ -32,6 +32,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
@@ -1596,7 +1597,7 @@ public class MainVerticleTest {
   }
 
   @Test
-  public void testOaiDatestamp() throws XMLStreamException {
+  public void testOaiDatestamp() throws XMLStreamException, InterruptedException {
     String time0 = Instant.now(Clock.systemUTC()).minusSeconds(1L).truncatedTo(ChronoUnit.SECONDS).toString();
     String time1 = Instant.now(Clock.systemUTC()).truncatedTo(ChronoUnit.SECONDS).toString();
 
@@ -1635,7 +1636,8 @@ public class MainVerticleTest {
         );
     ingestRecords(records1, sourceId1);
     String time2 = Instant.now(Clock.systemUTC()).truncatedTo(ChronoUnit.SECONDS).toString();
-    String time3 = Instant.now(Clock.systemUTC()).plusSeconds(1L).truncatedTo(ChronoUnit.SECONDS).toString();
+    TimeUnit.SECONDS.sleep(1);
+    String time3 = Instant.now(Clock.systemUTC()).truncatedTo(ChronoUnit.SECONDS).toString();
 
     s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1673,6 +1675,19 @@ public class MainVerticleTest {
         .contentType("text/xml")
         .extract().body().asString();
     verifyOaiResponse(s, "ListRecords", identifiers);
+
+    ingestRecords(records1, sourceId1);
+    s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("set", "isbn")
+        .param("verb", "ListRecords")
+        .param("from", time3)
+        .param("metadataPrefix", "marcxml")
+        .get("/shared-index/oai")
+        .then().statusCode(200)
+        .contentType("text/xml")
+        .extract().body().asString();
+    verifyOaiResponse(s, "ListRecords", identifiers, List.of("S101"));
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)

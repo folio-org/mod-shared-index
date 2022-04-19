@@ -269,13 +269,13 @@ public class Storage {
             return createCluster(conn, newClusterId, matchKeyConfigId); // create new cluster
           }
           UUID clusterId = iterator.next();
-          if (!iterator.hasNext()) {
-            return Future.succeededFuture(clusterId); // exactly one already
-          }
-          // multiple clusters: merge remaining with this one
-          return mergeClusters(conn, clusterId, iterator)
-              .compose(x -> updateCluster(conn, clusterId))
-              .map(clusterId);
+          return updateCluster(conn, clusterId).compose(c -> {
+            if (!iterator.hasNext()) {
+              return Future.succeededFuture(clusterId); // exactly one already
+            }
+            // multiple clusters: merge remaining with this one
+            return mergeClusters(conn, clusterId, iterator).map(clusterId);
+          });
         })
         .compose(clusterId ->
             conn.preparedQuery("INSERT INTO " + clusterRecordTable
