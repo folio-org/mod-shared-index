@@ -2,6 +2,7 @@ package org.folio.shared.index.api;
 
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
@@ -251,9 +252,16 @@ public class SharedIndexService implements RouterCreator, TenantInitHooks {
   }
 
   static void failHandler(int statusCode, RoutingContext ctx, String msg) {
-    ctx.response().setStatusCode(statusCode);
-    ctx.response().putHeader("Content-Type", "text/plain");
-    ctx.response().end(msg != null ? msg : "Failure");
+    HttpServerResponse response = ctx.response();
+    if (response.headWritten()) {
+      if (!response.ended()) {
+        ctx.response().end();
+      }
+      return;
+    }
+    response.setStatusCode(statusCode);
+    response.putHeader("Content-Type", "text/plain");
+    response.end(msg != null ? msg : "Failure");
   }
 
   private void add(RouterBuilder routerBuilder, String operationId,

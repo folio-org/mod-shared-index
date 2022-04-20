@@ -3,8 +3,10 @@ package org.folio.shared.index.api;
 import io.vertx.ext.web.validation.RequestParameter;
 import io.vertx.ext.web.validation.RequestParameters;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 
 public final class Util {
 
@@ -59,5 +61,10 @@ public final class Util {
     } catch (DateTimeParseException e) {
       throw OaiException.badArgument("bad until " + until + ":" + e.getMessage());
     }
+  }
+
+  public static String formatOaiDateTime(LocalDateTime d) {
+    return d.atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS)
+        .format(DateTimeFormatter.ISO_DATE_TIME);
   }
 }

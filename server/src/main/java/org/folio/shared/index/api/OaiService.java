@@ -19,8 +19,6 @@ import io.vertx.sqlclient.Transaction;
 import io.vertx.sqlclient.Tuple;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -76,22 +74,12 @@ public final class OaiService {
 
   static Future<Void> get(RoutingContext ctx) {
     return getCheck(ctx).recover(e -> {
-      if (ctx.response().headWritten()) {
-        log.error(e.getMessage(), e);
-        if (!ctx.response().ended()) {
-          ctx.response().end();
-        }
-        return Future.succeededFuture();
+      if (!(e instanceof OaiException)) {
+        return Future.failedFuture(e);
       }
-      String errorCode;
-      if (e instanceof OaiException) {
-        oaiHeader(ctx, 400);
-        errorCode = ((OaiException) e).getErrorCode();
-      } else {
-        log.error(e.getMessage(), e);
-        oaiHeader(ctx, 500);
-        errorCode = "internal";
-      }
+      log.error(e.getMessage(), e);
+      oaiHeader(ctx, 400);
+      String errorCode = ((OaiException) e).getErrorCode();
       ctx.response().write("  <error code=\"" + errorCode + "\">"
           + XmlJsonUtil.encodeXmlText(e.getMessage()) + "</error>\n");
       oaiFooter(ctx);
@@ -309,8 +297,7 @@ public final class OaiService {
                 + "        <identifier>"
                 + XmlJsonUtil.encodeXmlText(encodeOaiIdentifier(clusterId)) + "</identifier>\n"
                 + "        <datestamp>"
-                + XmlJsonUtil.encodeXmlText(
-                datestamp.atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toString())
+                + XmlJsonUtil.encodeXmlText(Util.formatOaiDateTime(datestamp))
                 + "</datestamp>\n"
                 + "        <setSpec>" + XmlJsonUtil.encodeXmlText(oaiSet) + "</setSpec>\n"
                 + "      </header>\n"
