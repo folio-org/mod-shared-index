@@ -31,7 +31,9 @@ public class ResumptionTokenTest {
     String until = null;
     String set = "my set";
     ResumptionToken token = new ResumptionToken(set, until);
+    Assert.assertEquals("set=" + set + " from=null until=" + until, token.toString());
     token.setFrom(from);
+
     String coded = token.encode();
 
     ResumptionToken token2 = new ResumptionToken(coded);
