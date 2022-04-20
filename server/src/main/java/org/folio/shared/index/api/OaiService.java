@@ -325,6 +325,7 @@ public final class OaiService {
     response.write("</resumptionToken>\n");
   }
 
+  @java.lang.SuppressWarnings({"squid:S107"})  // too many arguments
   static Future<Void> listRecordsResponse(RoutingContext ctx, Storage storage, SqlConnection conn,
       String sqlQuery, Tuple tuple, Integer limit, boolean withMetadata, ResumptionToken token) {
     String elem = withMetadata ? "ListRecords" : "ListIdentifiers";
@@ -351,8 +352,7 @@ public final class OaiService {
               }
             }
             cnt.incrementAndGet();
-            getXmlRecord(storage, conn,
-                row.getUUID("cluster_id"), row.getLocalDateTime("datestamp"),
+            getXmlRecord(storage, conn, row.getUUID("cluster_id"), datestamp,
                 row.getString("match_key_config_id"), withMetadata)
                 .onSuccess(xmlRecord ->
                     response.write(xmlRecord).onComplete(x -> stream.resume())

@@ -24,7 +24,6 @@ public class ResumptionToken {
    */
   public ResumptionToken(String coded) {
     String s = new String(Base64.getDecoder().decode(coded));
-    System.out.println("s = " + s);
     int i1 = s.indexOf(' ');
     int i2 = s.indexOf(' ', i1 + 1);
     if (i1 == -1 || i2 == -1) {

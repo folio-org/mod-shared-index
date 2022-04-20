@@ -33,7 +33,6 @@ import org.xml.sax.SAXException;
 
 public class XmlJsonUtil {
   private static final Logger LOGGER = LogManager.getLogger(XmlJsonUtil.class);
-
   private static final String COLLECTION_LABEL = "collection";
   private static final String RECORD_LABEL = "record";
   private static final String LEADER_LABEL = "leader";
@@ -41,7 +40,10 @@ public class XmlJsonUtil {
   private static final String CONTROLFIELD_LABEL = "controlfield";
   private static final String TAG_LABEL = "tag";
   private static final String SUBFIELD_LABEL = "subfield";
+  private static final String SUBFIELDS_LABEL = "subfields";
   private static final String CODE_LABEL = "code";
+
+  private static final String FIELDS_LABEL = "fields";
 
   private XmlJsonUtil() { }
 
@@ -57,7 +59,7 @@ public class XmlJsonUtil {
     if (leader != null) {
       s.append("  <" + LEADER_LABEL + ">" + encodeXmlText(leader) + "</" + LEADER_LABEL + ">\n");
     }
-    JsonArray fields = obj.getJsonArray("fields");
+    JsonArray fields = obj.getJsonArray(FIELDS_LABEL);
     if (fields !=  null) {
       for (int i = 0; i < fields.size(); i++) {
         JsonObject control = fields.getJsonObject(i);
@@ -82,7 +84,7 @@ public class XmlJsonUtil {
               }
             }
             s.append("\">\n");
-            JsonArray subfields = fieldObject.getJsonArray("subfields");
+            JsonArray subfields = fieldObject.getJsonArray(SUBFIELDS_LABEL);
             for (int j = 0; j < subfields.size(); j++) {
               JsonObject subfieldObject = subfields.getJsonObject(j);
               subfieldObject.fieldNames().forEach(sub -> {
@@ -163,7 +165,7 @@ public class XmlJsonUtil {
           fieldContent.put("ind2", childElement.getAttribute("ind2"));
         }
         JsonArray subfields = new JsonArray();
-        fieldContent.put("subfields", subfields);
+        fieldContent.put(SUBFIELDS_LABEL, subfields);
         NodeList nodeList = childElement.getElementsByTagNameNS("*", SUBFIELD_LABEL);
         for (int i = 0; i < nodeList.getLength(); i++) {
           Element subField = (Element) nodeList.item(i);
@@ -180,7 +182,7 @@ public class XmlJsonUtil {
       }
     }
     if (!fields.isEmpty()) {
-      marcJson.put("fields", fields);
+      marcJson.put(FIELDS_LABEL, fields);
     }
     return marcJson;
   }
@@ -443,10 +445,10 @@ public class XmlJsonUtil {
   public static JsonArray createMarcDataField(JsonObject marc, String tag,
       String ind1, String ind2) {
 
-    JsonArray fields = marc.getJsonArray("fields");
+    JsonArray fields = marc.getJsonArray(FIELDS_LABEL);
     if (fields == null) {
       fields = new JsonArray();
-      marc.put("fields", fields);
+      marc.put(FIELDS_LABEL, fields);
     }
     int i;
     for (i = 0; i < fields.size(); i++) {
@@ -467,7 +469,7 @@ public class XmlJsonUtil {
     field.put("ind1", ind1);
     field.put("ind2", ind2);
     JsonArray subfields = new JsonArray();
-    field.put("subfields", subfields);
+    field.put(SUBFIELDS_LABEL, subfields);
     return subfields;
   }
 
@@ -477,7 +479,7 @@ public class XmlJsonUtil {
    * @param tag fields with this tag are removed
    */
   public static void removeMarcField(JsonObject marc, String tag) {
-    JsonArray fields = marc.getJsonArray("fields");
+    JsonArray fields = marc.getJsonArray(FIELDS_LABEL);
     if (fields == null) {
       return;
     }
