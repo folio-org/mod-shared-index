@@ -21,6 +21,8 @@ public class ResumptionTokenTest {
     Assert.assertEquals(from, token2.getFrom());
     Assert.assertEquals(until, token2.getUntil());
     Assert.assertEquals(set, token2.getSet());
+
+    Assert.assertEquals("set=" + set + " from=" + from + " until=" + until, token2.toString());
   }
 
   @Test
@@ -36,6 +38,7 @@ public class ResumptionTokenTest {
     Assert.assertEquals(from, token2.getFrom());
     Assert.assertEquals(until, token2.getUntil());
     Assert.assertEquals(set, token2.getSet());
+    Assert.assertEquals("set=" + set + " from=" + from + " until=" + until, token2.toString());
   }
 
   @Test

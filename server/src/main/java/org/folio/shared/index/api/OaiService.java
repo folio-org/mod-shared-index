@@ -143,8 +143,9 @@ public final class OaiService {
     response.write("    <protocolVersion>2.0</protocolVersion>\n");
     response.write("    <adminEmail>");
     response.write(XmlJsonUtil.encodeXmlText(
-        config.getString("adminEmail", "adminEmail unspecified")));
-    response.write("    </adminEmail>\n");
+        config.getString("adminEmail", "admin@mail.unspecified")));
+    response.write("</adminEmail>\n");
+    response.write("    <earliestDatestamp>2020-01-01T00:00:00Z</earliestDatestamp>\n");
     response.write("    <deletedRecord>persistent</deletedRecord>\n");
     response.write("    <granularity>YYYY-MM-DDThh:mm:ssZ</granularity>\n");
     response.write("  </Identify>\n");
@@ -196,9 +197,15 @@ public final class OaiService {
 
   private static void endListResponse(RoutingContext ctx, SqlConnection conn, Transaction tx,
       String elem) {
-    ctx.response().write("  </" + elem + ">\n");
-    oaiFooter(ctx);
     tx.commit().compose(y -> conn.close());
+    HttpServerResponse response = ctx.response();
+    if (!response.headWritten()) { // no records returned is an error which is so weird.
+      oaiHeader(ctx, 200);
+      ctx.response().write("  <error code=\"noRecordsMatch\"/>\n");
+    } else {
+      response.write("  </" + elem + ">\n");
+    }
+    oaiFooter(ctx);
   }
 
   static void parseHoldingsRecords(JsonArray field, JsonObject inventoryPayload) {
@@ -292,10 +299,12 @@ public final class OaiService {
       clusterValues = getClusterValues(storage, conn, clusterId);
     }
     // When false withMetadata could optimize and not join with bibRecordTable
+    String begin = withMetadata ? "    <record>\n" : "";
+    String end = withMetadata ? "    </record>\n" : "";
     return clusterValues.compose(values -> getXmlRecordMetadata(storage, conn, clusterId,
         values)
         .map(metadata ->
-            "    <record>\n"
+            begin
                 + "      <header" + (metadata == null ? " status=\"deleted\"" : "") + ">\n"
                 + "        <identifier>"
                 + XmlJsonUtil.encodeXmlText(encodeOaiIdentifier(clusterId)) + "</identifier>\n"
@@ -306,7 +315,7 @@ public final class OaiService {
                 + "        <setSpec>" + XmlJsonUtil.encodeXmlText(oaiSet) + "</setSpec>\n"
                 + "      </header>\n"
                 + (withMetadata && metadata != null ? metadata : "")
-                + "    </record>\n"));
+                + end));
   }
 
   static void writeResumptionToken(RoutingContext ctx, ResumptionToken token) {
@@ -323,12 +332,14 @@ public final class OaiService {
     return conn.prepare(sqlQuery).compose(pq ->
         conn.begin().compose(tx -> {
           HttpServerResponse response = ctx.response();
-          oaiHeader(ctx, 200);
-          response.write("  <" + elem + ">\n");
           RowStream<Row> stream = pq.createStream(100, tuple);
           AtomicInteger cnt = new AtomicInteger();
           stream.handler(row -> {
             stream.pause();
+            if (cnt.get() == 0) {
+              oaiHeader(ctx, 200);
+              response.write("  <" + elem + ">\n");
+            }
             LocalDateTime datestamp = row.getLocalDateTime("datestamp");
             if (token.getFrom() == null || datestamp.isAfter(token.getFrom())) {
               token.setFrom(datestamp);

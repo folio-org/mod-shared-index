@@ -18,14 +18,13 @@ import io.vertx.ext.web.client.predicate.ResponsePredicate;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
-import java.time.temporal.TemporalUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -33,14 +32,20 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import javax.xml.XMLConstants;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
+import javax.xml.transform.Source;
+import javax.xml.transform.stream.StreamSource;
+import javax.xml.validation.Schema;
+import javax.xml.validation.SchemaFactory;
+import javax.xml.validation.Validator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.folio.okapi.common.XOkapiHeaders;
-import org.folio.shared.index.util.XmlJsonUtil;
+import org.folio.shared.index.api.ResumptionToken;
 import org.folio.tlib.postgres.testing.TenantPgPoolContainer;
 import org.hamcrest.Matchers;
 import org.junit.AfterClass;
@@ -50,6 +55,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.xml.sax.SAXException;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
@@ -67,11 +73,18 @@ public class MainVerticleTest {
   static final String MODULE_URL = "http://localhost:" + MODULE_PORT;
   static String tenant1 = "tenant1";
 
+  static Validator oaiSchemaValidator;
+
   @ClassRule
   public static PostgreSQLContainer<?> postgresSQLContainer = TenantPgPoolContainer.create();
 
   @BeforeClass
-  public static void beforeClass(TestContext context) throws IOException {
+  public static void beforeClass(TestContext context) throws IOException, SAXException {
+    URL schemaFile = MainVerticleTest.class.getResource("/OAI-PMH.xsd");
+    SchemaFactory schemaFactory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
+    Schema schema = schemaFactory.newSchema(schemaFile);
+    oaiSchemaValidator = schema.newValidator();
+
     vertx = Vertx.vertx();
     WebClient webClient = WebClient.create(vertx);
 
@@ -505,14 +518,19 @@ public class MainVerticleTest {
     }
   }
 
-  static void verifyOaiResponse(String s, String envelope, List<String> identifiers, int length) throws XMLStreamException {
+  static String verifyOaiResponse(String s, String envelope, List<String> identifiers, int length)
+      throws XMLStreamException, IOException, SAXException {
     InputStream stream = new ByteArrayInputStream(s.getBytes());
+    Source source = new StreamSource(stream);
+    oaiSchemaValidator.validate(source);
+
+    stream = new ByteArrayInputStream(s.getBytes());
     XMLInputFactory factory = XMLInputFactory.newInstance();
     XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(stream);
     String path = "";
     boolean foundEnvelope = false;
+    String resumptionToken = null;
 
-    identifiers.clear();
     int offset = 0;
     int level = 0;
     while (xmlStreamReader.hasNext()) {
@@ -524,8 +542,14 @@ public class MainVerticleTest {
           foundEnvelope = true;
         }
         path = path + "/" + elem;
-        if ("record".equals(elem) && level == 3) {
+        if (level == 3 && ("record".equals(elem) || "header".equals(elem))) {
           offset++;
+        }
+        if (level == 3 && "resumptionToken".equals(elem)) {
+          event = xmlStreamReader.next();
+          if (event == XMLStreamConstants.CHARACTERS) {
+            resumptionToken = xmlStreamReader.getText();
+          }
         }
         if ("identifier".equals(elem) && xmlStreamReader.hasNext()) {
           event = xmlStreamReader.next();
@@ -542,7 +566,10 @@ public class MainVerticleTest {
     if (length != -1) {
       Assert.assertEquals(s, length, offset);
     }
-    Assert.assertTrue(s, foundEnvelope);
+    if (length > 0) {
+      Assert.assertTrue(s, foundEnvelope);
+    }
+    return resumptionToken;
   }
 
   /**
@@ -1398,7 +1425,8 @@ public class MainVerticleTest {
   }
 
   @Test
-  public void testIdentify() throws XMLStreamException {
+  public void testIdentify() throws XMLStreamException, IOException, SAXException {
+    vertx.getOrCreateContext().config().put("adminEmail", "admin@indexdata.com");
     List<String> identifiers = new LinkedList<>();
     String s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1411,7 +1439,7 @@ public class MainVerticleTest {
   }
 
   @Test
-  public void testOaiSimple() throws XMLStreamException {
+  public void testOaiSimple() throws XMLStreamException, IOException, SAXException {
     JsonObject matchKey1 = new JsonObject()
         .put("id", "isbn")
         .put("method", "jsonpath")
@@ -1496,7 +1524,6 @@ public class MainVerticleTest {
         .contentType("text/xml")
         .extract().body().asString();
     verifyOaiResponse(s, "ListRecords", identifiers, 1);
-    log.info(" issn S = {}", s);
 
     s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
@@ -1507,6 +1534,7 @@ public class MainVerticleTest {
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
+    log.info(" issn S = {}", s);
     verifyOaiResponse(s, "ListIdentifiers", identifiers, 1);
 
     s = RestAssured.given()
@@ -1599,7 +1627,7 @@ public class MainVerticleTest {
   }
 
   @Test
-  public void testOaiDatestamp() throws XMLStreamException, InterruptedException {
+  public void testOaiDatestamp() throws XMLStreamException, InterruptedException, IOException, SAXException {
     String time0 = Instant.now(Clock.systemUTC()).minusSeconds(1L).truncatedTo(ChronoUnit.SECONDS).toString();
     String time1 = Instant.now(Clock.systemUTC()).truncatedTo(ChronoUnit.SECONDS).toString();
 
@@ -1711,7 +1739,7 @@ public class MainVerticleTest {
   }
 
   @Test
-  public void testOaiResumptionToken() throws XMLStreamException, InterruptedException {
+  public void testOaiResumptionToken() throws XMLStreamException, InterruptedException, IOException, SAXException {
     JsonObject matchKey1 = new JsonObject()
         .put("id", "isbn")
         .put("method", "jsonpath")
@@ -1736,19 +1764,37 @@ public class MainVerticleTest {
               .put("inventoryPayload", new JsonObject().put("isbn", new JsonArray().add(Integer.toString(i))))
           );
       ingestRecords(records1, sourceId1);
-      TimeUnit.MILLISECONDS.sleep(1);
     }
     List<String> identifiers = new LinkedList<>();
+
     String s = RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .param("verb", "ListRecords")
         .param("list-limit", "2")
-        .param("metadataPrefix", "marcxml")
         .get("/shared-index/oai")
         .then().statusCode(200)
         .contentType("text/xml")
         .extract().body().asString();
-    verifyOaiResponse(s, "ListRecords", identifiers, -1);
+    int iter;
+    for (iter = 0; iter < 10; iter++) {
+      String token = verifyOaiResponse(s, "ListRecords", identifiers, -1);
+      if (token == null) {
+        break;
+      }
+      ResumptionToken tokenClass = new ResumptionToken(token);
+      Assert.assertEquals("isbn", tokenClass.getSet());
+      s = RestAssured.given()
+          .header(XOkapiHeaders.TENANT, tenant1)
+          .param("verb", "ListRecords")
+          .param("list-limit", "2")
+          .param("resumptionToken", token)
+          .get("/shared-index/oai")
+          .then().statusCode(200)
+          .contentType("text/xml")
+          .extract().body().asString();
+    }
+    Assert.assertEquals(4, iter);
+    Assert.assertEquals(10, identifiers.size());
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)

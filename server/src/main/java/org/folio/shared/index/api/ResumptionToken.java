@@ -63,4 +63,8 @@ public class ResumptionToken {
   public String getSet() {
     return set;
   }
+
+  public String toString() {
+    return "set=" + set + " from=" + (from != null ? from.toString() : "null") + " until=" + until;
+  }
 }
