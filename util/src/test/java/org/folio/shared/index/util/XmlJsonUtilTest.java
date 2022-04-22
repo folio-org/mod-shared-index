@@ -577,6 +577,7 @@ public class XmlJsonUtilTest {
     Assert.assertEquals(s200, XmlJsonUtil.lookupMarcDataField(got, "200", null, "2"));
     Assert.assertEquals(s200, XmlJsonUtil.lookupMarcDataField(got, "200", "1", null));
     Assert.assertNull(XmlJsonUtil.lookupMarcDataField(got, "200", "2", null));
+    Assert.assertNull(XmlJsonUtil.lookupMarcDataField(got, "200", "1", "3"));
     Assert.assertNull(XmlJsonUtil.lookupMarcDataField(got, "201", "1", "2"));
     XmlJsonUtil.createMarcDataField(got, "999", " ", " ");
     JsonObject exp = MARCJSON2_SAMPLE.copy();
