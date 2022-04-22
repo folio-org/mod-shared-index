@@ -474,6 +474,35 @@ public class XmlJsonUtil {
   }
 
   /**
+   * Lookup marc field.
+   * @param marc MARC-in-JSON object
+   * @param tag marc tag, such as "245"
+   * @param ind1 indicator1 in match ; null for any
+   * @param ind2 indicator2 in match; null for any
+   * @return subfields array if found; null otherwise
+   */
+  public static JsonArray lookupMarcDataField(JsonObject marc, String tag,
+      String ind1, String ind2) {
+    JsonArray fields = marc.getJsonArray(FIELDS_LABEL);
+    if (fields == null) {
+      return null;
+    }
+    for (int i = 0; i < fields.size(); i++) {
+      JsonObject field = fields.getJsonObject(i);
+      for (String f : field.fieldNames()) {
+        if (f.equals(tag)) {
+          JsonObject field2 = field.getJsonObject(tag);
+          if ((ind1 == null || ind1.equals(field2.getString("ind1")))
+              && (ind2 == null || ind2.equals(field2.getString("ind2")))) {
+            return field2.getJsonArray(SUBFIELDS_LABEL);
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
    * Remove tag from record.
    * @param marc MARC-in-JSON object
    * @param tag fields with this tag are removed

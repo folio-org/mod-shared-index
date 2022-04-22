@@ -196,24 +196,6 @@ public final class OaiService {
     oaiFooter(ctx);
   }
 
-  static void parseHoldingsRecords(JsonArray field, JsonObject inventoryPayload) {
-    if (inventoryPayload == null) {
-      return;
-    }
-
-    JsonArray holdingsRecords = inventoryPayload.getJsonArray("holdingsRecords");
-    if (holdingsRecords == null) {
-      return;
-    }
-    for (int i = 0; i < holdingsRecords.size(); i++) {
-      JsonObject holdingsRecord = holdingsRecords.getJsonObject(i);
-      String permanentLocation = holdingsRecord.getString("permanentLocationDeref");
-      if (permanentLocation != null) {
-        field.add(new JsonObject().put("b", permanentLocation));
-      }
-    }
-  }
-
   /**
    * Construct metadata record XML string.
    *
@@ -229,8 +211,7 @@ public final class OaiService {
    */
   static String getMetadata(RowSet<Row> rowSet, UUID clusterId, List<String> matchValues) {
     RowIterator<Row> iterator = rowSet.iterator();
-    JsonObject marc = null;
-    JsonArray holdings = new JsonArray();
+    JsonObject combinedMarc = null;
     JsonArray identifiersField = new JsonArray();
     identifiersField.add(new JsonObject().put("i", clusterId.toString()));
     for (String matchValue : matchValues) {
@@ -238,23 +219,27 @@ public final class OaiService {
     }
     while (iterator.hasNext()) {
       Row row = iterator.next();
-      if (marc == null) {
-        marc = row.getJsonObject("marc_payload");
+      JsonObject thisMarc = row.getJsonObject("marc_payload");
+      JsonArray f999 = XmlJsonUtil.lookupMarcDataField(thisMarc, "999", " ", " ");
+      if (combinedMarc == null) {
+        combinedMarc = thisMarc;
+      } else {
+        JsonArray c999 = XmlJsonUtil.lookupMarcDataField(combinedMarc, "999", " ", " ");
+        // normally we'd have 999 in combined record
+        if (f999 != null && c999 != null) {
+          c999.addAll(f999); // all 999 in one data field
+        }
       }
-      JsonObject inventoryPayload = row.getJsonObject("inventory_payload");
-      parseHoldingsRecords(holdings, inventoryPayload);
       identifiersField.add(new JsonObject()
           .put("l", row.getString("local_id"))
           .put("s", row.getUUID("source_id").toString())
       );
     }
-    if (marc == null) {
+    if (combinedMarc == null) {
       return null; // a deleted record
     }
-    XmlJsonUtil.removeMarcField(marc, "999");
-    XmlJsonUtil.createMarcDataField(marc, "999", "1", "0").addAll(identifiersField);
-    XmlJsonUtil.createMarcDataField(marc, "999", "0", "0").addAll(holdings);
-    String xmlMetadata = XmlJsonUtil.convertJsonToMarcXml(marc);
+    XmlJsonUtil.createMarcDataField(combinedMarc, "999", "1", "0").addAll(identifiersField);
+    String xmlMetadata = XmlJsonUtil.convertJsonToMarcXml(combinedMarc);
     return "    <metadata>\n" + xmlMetadata + "\n    </metadata>\n";
   }
 

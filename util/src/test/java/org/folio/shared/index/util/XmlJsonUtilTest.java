@@ -556,7 +556,9 @@ public class XmlJsonUtilTest {
   @Test
   public void createMarcDataField1() {
     JsonObject got = MARCJSON1_SAMPLE.copy();
+    Assert.assertNull(XmlJsonUtil.lookupMarcDataField(got, "245", "1", "2"));
     JsonArray ar = XmlJsonUtil.createMarcDataField(got, "245", "1", "2");
+    Assert.assertEquals(ar, XmlJsonUtil.lookupMarcDataField(got, "245", "1", "2"));
     JsonObject exp = MARCJSON1_SAMPLE.copy();
     exp.put("fields", new JsonArray().add(new JsonObject()
         .put("245", new JsonObject()
@@ -570,7 +572,12 @@ public class XmlJsonUtilTest {
   @Test
   public void createMarcDataField2() {
     JsonObject got = MARCJSON2_SAMPLE.copy();
-    XmlJsonUtil.createMarcDataField(got, "200", "1", "2");
+    JsonArray s200 = XmlJsonUtil.createMarcDataField(got, "200", "1", "2");
+    Assert.assertEquals(s200, XmlJsonUtil.lookupMarcDataField(got, "200", "1", "2"));
+    Assert.assertEquals(s200, XmlJsonUtil.lookupMarcDataField(got, "200", null, "2"));
+    Assert.assertEquals(s200, XmlJsonUtil.lookupMarcDataField(got, "200", "1", null));
+    Assert.assertNull(XmlJsonUtil.lookupMarcDataField(got, "200", "2", null));
+    Assert.assertNull(XmlJsonUtil.lookupMarcDataField(got, "201", "1", "2"));
     XmlJsonUtil.createMarcDataField(got, "999", " ", " ");
     JsonObject exp = MARCJSON2_SAMPLE.copy();
     exp.getJsonArray("fields")
