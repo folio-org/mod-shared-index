@@ -50,11 +50,11 @@ public final class OaiService {
     return UUID.fromString(identifier.substring(off + 1));
   }
 
-  static void oaiHeader(RoutingContext ctx, int httpStatus) {
+  static void oaiHeader(RoutingContext ctx) {
     RequestParameters params = ctx.get(ValidationHandler.REQUEST_CONTEXT_KEY);
     HttpServerResponse response = ctx.response();
     response.setChunked(true);
-    response.setStatusCode(httpStatus);
+    response.setStatusCode(200);
     response.putHeader("Content-Type", "text/xml");
     response.write(OAI_HEADER);
     response.write("  <responseDate>" + Instant.now() + "</responseDate>\n");
@@ -78,7 +78,7 @@ public final class OaiService {
         return Future.failedFuture(e);
       }
       log.error(e.getMessage(), e);
-      oaiHeader(ctx, 400);
+      oaiHeader(ctx);
       String errorCode = ((OaiException) e).getErrorCode();
       ctx.response().write("  <error code=\"" + errorCode + "\">"
           + XmlJsonUtil.encodeXmlText(e.getMessage()) + "</error>\n");
@@ -116,7 +116,7 @@ public final class OaiService {
   }
 
   static Future<Void> identify(RoutingContext ctx) {
-    oaiHeader(ctx, 200);
+    oaiHeader(ctx);
     JsonObject config = ctx.vertx().getOrCreateContext().config();
     HttpServerResponse response = ctx.response();
     response.write("  <Identify>\n");
@@ -162,7 +162,7 @@ public final class OaiService {
           + " WHERE match_key_config_id = $1");
       int no = 2;
       if (token != null) {
-        tupleList.add(token.getFrom());
+        tupleList.add(token.getFrom()); // from from resumptionToken is with fraction of seconds
         sqlQuery.append(" AND datestamp >= $" + no);
         no++;
       } else if (from != null) {
@@ -188,7 +188,7 @@ public final class OaiService {
     tx.commit().compose(y -> conn.close());
     HttpServerResponse response = ctx.response();
     if (!response.headWritten()) { // no records returned is an error which is so weird.
-      oaiHeader(ctx, 200);
+      oaiHeader(ctx);
       ctx.response().write("  <error code=\"noRecordsMatch\"/>\n");
     } else {
       response.write("  </" + elem + ">\n");
@@ -325,7 +325,7 @@ public final class OaiService {
           stream.handler(row -> {
             stream.pause();
             if (cnt.get() == 0) {
-              oaiHeader(ctx, 200);
+              oaiHeader(ctx);
               response.write("  <" + elem + ">\n");
             }
             LocalDateTime datestamp = row.getLocalDateTime("datestamp");
@@ -382,7 +382,7 @@ public final class OaiService {
                   row.getUUID("cluster_id"), row.getLocalDateTime("datestamp"),
                   row.getString("match_key_config_id"), true)
                   .map(xmlRecord -> {
-                    oaiHeader(ctx, 200);
+                    oaiHeader(ctx);
                     ctx.response().write("  <GetRecord>\n");
                     ctx.response().write(xmlRecord);
                     ctx.response().write("  </GetRecord>\n");

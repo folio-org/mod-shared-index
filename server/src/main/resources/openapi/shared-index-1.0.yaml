@@ -457,23 +457,15 @@ paths:
       operationId: oaiService
       responses:
         "200":
-          description: OAI response OK
+          description: OAI response (possibly with OAI error code)
           content:
             text/xml:
               schema:
                 type: string
         "400":
-          description: OAI response with user error
-          content:
-            text/xml:
-              schema:
-                type: string
+          $ref: "#/components/responses/trait_400"
         "500":
-          description: OAI response with internal error
-          content:
-            text/xml:
-              schema:
-                type: string
+          $ref: "#/components/responses/trait_500"
 # Shared error responses
 components:
   responses:

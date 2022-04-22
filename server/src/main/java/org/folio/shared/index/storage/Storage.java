@@ -395,16 +395,28 @@ public class Storage {
   }
 
   /**
-   * Delete global records and corresponding match value table entries.
+   * Delete global records and update timestamp.
    * @param sqlWhere SQL WHERE clause
    * @return async result
    */
   public Future<Void> deleteGlobalRecords(String sqlWhere) {
-    String from = bibRecordTable;
+    String q = "UPDATE " + clusterMetaTable + " AS m"
+        + " SET datestamp = $1"
+        + " FROM " + bibRecordTable + ", " + clusterRecordTable + " AS r"
+        + " WHERE m.cluster_id = r.cluster_id AND r.record_id = id";
     if (sqlWhere != null) {
-      from = from + " WHERE " + sqlWhere;
+      q = q + " AND " + sqlWhere;
     }
-    return pool.query("DELETE FROM " + from).execute().mapEmpty();
+    return pool.preparedQuery(q)
+        .execute(Tuple.of(LocalDateTime.now(ZoneOffset.UTC)))
+        .compose(x -> {
+          String from = bibRecordTable;
+          if (sqlWhere != null) {
+            from = from + " WHERE " + sqlWhere;
+          }
+          return pool.query("DELETE FROM " + from).execute();
+        })
+        .mapEmpty();
   }
 
   /**

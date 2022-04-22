@@ -1371,7 +1371,7 @@ public class MainVerticleTest {
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .get("/shared-index/oai")
-        .then().statusCode(400)
+        .then().statusCode(200)
         .contentType("text/xml")
         .body(containsString("<error code=\"badVerb\">missing verb</error>"));
 
@@ -1381,7 +1381,7 @@ public class MainVerticleTest {
         .param("verb", "noop")
         .param("metadataPrefix", "marcxml")
         .get("/shared-index/oai")
-        .then().statusCode(400)
+        .then().statusCode(200)
         .contentType("text/xml")
         .body(containsString("<error code=\"badVerb\">noop</error>"));
 
@@ -1390,7 +1390,7 @@ public class MainVerticleTest {
         .param("verb", "GetRecord")
         .param("metadataPrefix", "marcxml")
         .get("/shared-index/oai")
-        .then().statusCode(400)
+        .then().statusCode(200)
         .contentType("text/xml")
         .body(containsString("error code=\"badArgument\">missing identifier</error>"));
 
@@ -1400,7 +1400,7 @@ public class MainVerticleTest {
         .param("verb", "ListRecords")
         .param("metadataPrefix", "badmetadataprefix")
         .get("/shared-index/oai")
-        .then().statusCode(400)
+        .then().statusCode(200)
         .contentType("text/xml")
         .body(containsString("<error code=\"cannotDisseminateFormat\">only metadataPrefix &quot;marcxml&quot; supported</error>"));
 
@@ -1409,7 +1409,7 @@ public class MainVerticleTest {
         .param("verb", "ListRecords")
         .param("metadataPrefix", "marcxml")
         .get("/shared-index/oai")
-        .then().statusCode(400)
+        .then().statusCode(200)
         .contentType("text/xml")
         .body(containsString("<error code=\"badArgument\">set &quot;null&quot; not found</error>"));
 
@@ -1419,7 +1419,7 @@ public class MainVerticleTest {
         .param("verb", "ListRecords")
         .param("metadataPrefix", "marcxml")
         .get("/shared-index/oai")
-        .then().statusCode(400)
+        .then().statusCode(200)
         .contentType("text/xml")
         .body(containsString("<error code=\"badArgument\">set &quot;isbn&quot; not found</error>"));
   }
@@ -1554,7 +1554,7 @@ public class MainVerticleTest {
         .param("metadataPrefix", "marcxml")
         .param("identifier", UUID.randomUUID().toString())
         .get("/shared-index/oai")
-        .then().statusCode(400)
+        .then().statusCode(200)
         .contentType("text/xml")
         .body(containsString("idDoesNotExist"));
 
@@ -1721,16 +1721,29 @@ public class MainVerticleTest {
         .param("from", "xxxx")
         .param("metadataPrefix", "marcxml")
         .get("/shared-index/oai")
-        .then().statusCode(400)
+        .then().statusCode(200)
         .contentType("text/xml")
         .body(containsString("error code=\"badArgument\">bad from"));
 
+    TimeUnit.SECONDS.sleep(1);
+    String time4 = Instant.now(Clock.systemUTC()).truncatedTo(ChronoUnit.SECONDS).toString();
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)
         .header("Content-Type", "application/json")
         .param("query", "cql.allRecords=true")
         .delete("/shared-index/records")
         .then().statusCode(204);
+
+    s = RestAssured.given()
+        .header(XOkapiHeaders.TENANT, tenant1)
+        .param("verb", "ListRecords")
+        .param("from", time4)
+        .param("metadataPrefix", "marcxml")
+        .get("/shared-index/oai")
+        .then().statusCode(200)
+        .contentType("text/xml")
+        .extract().body().asString();
+    verifyOaiResponse(s, "ListRecords", identifiers, 1);
 
     RestAssured.given()
         .header(XOkapiHeaders.TENANT, tenant1)

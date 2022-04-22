@@ -4,5 +4,5 @@ description: OAI list records/identifiers returns resumptionToken if this is met
 required: false
 schema:
   type: integer
-  default: 10000
+  default: 1000
   minimum: 1
