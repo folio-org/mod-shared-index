@@ -208,13 +208,13 @@ public class Storage {
     return updateClusterForRecord(conn, globalId, matchKeyConfigId, keys);
   }
 
-  Future<Void> updateClusterValues(SqlConnection conn, int iterations, UUID newClusterId,
-      String matchKeyConfigId, Collection<String> keys, Set<UUID> clustersFound) {
+  Future<Set<UUID>> updateClusterValues(SqlConnection conn, int iterations, UUID newClusterId,
+      String matchKeyConfigId, Collection<String> keys) {
 
+    Set<UUID> clustersFound = new HashSet<>();
     if (keys.isEmpty()) {
-      return Future.succeededFuture();
+      return Future.succeededFuture(clustersFound);
     }
-    clustersFound.clear();
     StringBuilder q = new StringBuilder("SELECT cluster_id, match_value FROM " + clusterValueTable
         + " WHERE match_key_config_id = $1 AND (");
     List<Object> tupleList = new ArrayList<>();
@@ -245,6 +245,7 @@ public class Storage {
         .compose(clusterId ->
             addValuesToCluster(conn, clusterId, matchKeyConfigId, keys, foundKeys)
         )
+        .map(clustersFound)
         .recover(
             e -> {
               if (iterations >= 3) {
@@ -253,17 +254,16 @@ public class Storage {
               }
               log.warn("addValuesToCluster iter={} {}", iterations, e.getMessage(), e);
               return updateClusterValues(conn,  iterations + 1, newClusterId, matchKeyConfigId,
-                  keys, clustersFound);
+                  keys);
             });
   }
 
   Future<Void> updateClusterForRecord(SqlConnection conn, UUID globalId,
       String matchKeyConfigId, Collection<String> keys) {
 
-    Set<UUID> clustersFound = new HashSet<>();
     UUID newClusterId = UUID.randomUUID();
-    return updateClusterValues(conn, 0, newClusterId, matchKeyConfigId, keys, clustersFound)
-        .compose(created -> {
+    return updateClusterValues(conn, 0, newClusterId, matchKeyConfigId, keys)
+        .compose(clustersFound -> {
           Iterator<UUID> iterator = clustersFound.iterator();
           if (!iterator.hasNext()) {
             return createCluster(conn, newClusterId, matchKeyConfigId); // create new cluster
