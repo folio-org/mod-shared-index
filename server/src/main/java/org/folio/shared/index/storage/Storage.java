@@ -14,7 +14,6 @@ import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.RowStream;
 import io.vertx.sqlclient.SqlConnection;
 import io.vertx.sqlclient.Tuple;
-import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -135,7 +134,20 @@ public class Storage {
             "CREATE UNIQUE INDEX IF NOT EXISTS cluster_value_value_idx ON "
                 + clusterValueTable + "(match_key_config_id, match_value)",
             "CREATE INDEX IF NOT EXISTS cluster_value_cluster_idx ON "
-                + clusterValueTable + "(cluster_id)"
+                + clusterValueTable + "(cluster_id)",
+            "CREATE OR REPLACE FUNCTION process_meta_datestamp() RETURNS TRIGGER AS $process_meta$"
+                + " BEGIN"
+                + "  IF (TG_OP = 'UPDATE' OR TG_OP = 'DELETE') THEN"
+                + "    UPDATE " + clusterMetaTable + " SET datestamp = now()"
+                + "      WHERE cluster_id = " + clusterMetaTable + ".cluster_id;"
+                + "  END IF;"
+                + "  RETURN NULL;"
+                + "  END;"
+                + "$process_meta$ LANGUAGE plpgsql;",
+            "DROP TRIGGER IF EXISTS process_meta ON " + clusterRecordTable,
+            "CREATE TRIGGER process_meta"
+                +   "  AFTER INSERT OR UPDATE OR DELETE ON " + clusterRecordTable
+                +   "    FOR EACH ROW EXECUTE FUNCTION process_meta_datestamp();"
         )
     ).mapEmpty();
   }
@@ -269,13 +281,11 @@ public class Storage {
             return createCluster(conn, newClusterId, matchKeyConfigId); // create new cluster
           }
           UUID clusterId = iterator.next();
-          return updateCluster(conn, clusterId).compose(c -> {
-            if (!iterator.hasNext()) {
-              return Future.succeededFuture(clusterId); // exactly one already
-            }
-            // multiple clusters: merge remaining with this one
-            return mergeClusters(conn, clusterId, iterator).map(clusterId);
-          });
+          if (!iterator.hasNext()) {
+            return Future.succeededFuture(clusterId); // exactly one already
+          }
+          // multiple clusters: merge remaining with this one
+          return mergeClusters(conn, clusterId, iterator).map(clusterId);
         })
         .compose(clusterId ->
             conn.preparedQuery("INSERT INTO " + clusterRecordTable
@@ -316,16 +326,9 @@ public class Storage {
 
   Future<UUID> createCluster(SqlConnection conn, UUID clusterId, String matchKeyConfigId) {
     return conn.preparedQuery("INSERT INTO " + clusterMetaTable
-            + " (cluster_id, datestamp, match_key_config_id) VALUES ($1, $2, $3)")
-        .execute(Tuple.of(clusterId, LocalDateTime.now(ZoneOffset.UTC), matchKeyConfigId))
+            + " (cluster_id, datestamp, match_key_config_id) VALUES ($1, now(), $2)")
+        .execute(Tuple.of(clusterId, matchKeyConfigId))
         .map(clusterId);
-  }
-
-  Future<Void> updateCluster(SqlConnection conn, UUID clusterId) {
-    return conn.preparedQuery("UPDATE " + clusterMetaTable
-            + " SET datestamp = $2 WHERE cluster_id = $1")
-        .execute(Tuple.of(clusterId, LocalDateTime.now(ZoneOffset.UTC)))
-        .mapEmpty();
   }
 
   Future<Void> mergeClusters(SqlConnection conn, UUID clusterId, Iterator<UUID> iterator) {
@@ -400,22 +403,11 @@ public class Storage {
    * @return async result
    */
   public Future<Void> deleteGlobalRecords(String sqlWhere) {
-    String q = "UPDATE " + clusterMetaTable + " AS m"
-        + " SET datestamp = $1"
-        + " FROM " + bibRecordTable + ", " + clusterRecordTable + " AS r"
-        + " WHERE m.cluster_id = r.cluster_id AND r.record_id = id";
+    String from = bibRecordTable;
     if (sqlWhere != null) {
-      q = q + " AND " + sqlWhere;
+      from = from + " WHERE " + sqlWhere;
     }
-    return pool.preparedQuery(q)
-        .execute(Tuple.of(LocalDateTime.now(ZoneOffset.UTC)))
-        .compose(x -> {
-          String from = bibRecordTable;
-          if (sqlWhere != null) {
-            from = from + " WHERE " + sqlWhere;
-          }
-          return pool.query("DELETE FROM " + from).execute();
-        })
+    return pool.query("DELETE FROM " + from).execute()
         .mapEmpty();
   }
 
