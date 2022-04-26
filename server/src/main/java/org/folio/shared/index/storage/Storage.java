@@ -185,9 +185,11 @@ public class Storage {
     return pool.withTransaction(conn ->
             upsertGlobalRecord(conn, sourceId, globalRecord, matchKeyConfigs))
         // addValuesToCluster may fail if for same new match key for parallel operations
-        // we recover just once for that.. 2nd wil find the new value for the one that
+        // we recover just once for that. 2nd will find the new value for the one that
         // succeeded.
-        .recover(x -> upsertGlobalRecord(sourceId, globalRecord, matchKeyConfigs));
+        .recover(x ->
+            pool.withTransaction(conn ->
+                upsertGlobalRecord(conn, sourceId, globalRecord, matchKeyConfigs)));
   }
 
   Future<Void> upsertGlobalRecord(SqlConnection conn, UUID sourceId,
