@@ -179,18 +179,15 @@ public class Storage {
         .mapEmpty());
   }
 
-  Future<Void> upsertGlobalRecord(UUID sourceId, JsonObject globalRecord, JsonArray matchKeyConfigs,
-      int iter) {
+  Future<Void> upsertGlobalRecord(UUID sourceId, JsonObject globalRecord,
+      JsonArray matchKeyConfigs) {
 
     return pool.withTransaction(conn ->
-            upsertGlobalRecord(conn, sourceId, globalRecord, matchKeyConfigs)
-        )
-        .recover(x -> {
-          if (iter > 2) {
-            return Future.failedFuture(x);
-          }
-          return upsertGlobalRecord(sourceId, globalRecord, matchKeyConfigs, iter + 1);
-        });
+            upsertGlobalRecord(conn, sourceId, globalRecord, matchKeyConfigs))
+        // addValuesToCluster may fail if for same new match key for parallel operations
+        // we recover just once for that.. 2nd wil find the new value for the one that
+        // succeeded.
+        .recover(x -> upsertGlobalRecord(sourceId, globalRecord, matchKeyConfigs));
   }
 
   Future<Void> upsertGlobalRecord(SqlConnection conn, UUID sourceId,
@@ -386,7 +383,7 @@ public class Storage {
               List<Future<Void>> futures = new ArrayList<>(records.size());
               for (int i = 0; i < records.size(); i++) {
                 JsonObject globalRecord = records.getJsonObject(i);
-                futures.add(upsertGlobalRecord(sourceId, globalRecord, matchKeyConfigs, 0));
+                futures.add(upsertGlobalRecord(sourceId, globalRecord, matchKeyConfigs));
               }
               return GenericCompositeFuture.all(futures).mapEmpty();
             }
