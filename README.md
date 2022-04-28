@@ -1,11 +1,13 @@
 # mod-shared-index
 
-This project is renamed to [mod-meta-storage](https://github.com/folio-org/mod-meta-storage)
-
 Copyright (C) 2021-2022 The Open Library Foundation
 
 This software is distributed under the terms of the Apache License,
 Version 2.0. See the file "[LICENSE](LICENSE)" for more information.
+
+## DEPRECATED
+
+This project is renamed to [mod-meta-storage](https://github.com/folio-org/mod-meta-storage)
 
 ## Introduction
 
